@@ -1,9 +1,44 @@
-# @supercat1337/router
+# `@supercat1337/router`
 
 > Synchronous state-relative router for SPA and SSR over a tree of JS objects.
 
 [![npm version](https://badge.fury.io/js/%40supercat1337%2Frouter.svg)](https://www.npmjs.com/package/@supercat1337/router)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+A framework-agnostic routing engine where the active route tree is a **pure function of `(state, url)`** — derived, never set imperatively. Navigation is a **synchronous atomic transaction**: no `await` between `navigate()` and the last event. Async is an explicit boundary: data loading lives in `afterEnter`, pre-navigation checks live in an optional guard layer, nothing leaks into the core.
+
+## Table of contents
+
+- [Why this router](#why-this-router)
+- [When NOT to use this router](#when-not-to-use-this-router)
+- [Installation](#installation)
+- [Quick start — JavaScript](#quick-start--javascript)
+- [Quick start — TypeScript](#quick-start--typescript)
+- [Core concepts](#core-concepts)
+    - [Routes are data](#routes-are-data)
+    - [Maps are independent](#maps-are-independent)
+    - [Transactions are synchronous](#transactions-are-synchronous)
+    - [Snapshot is pull, events are push](#snapshot-is-pull-events-are-push)
+    - [`navigationId` — transaction id, not history position](#navigationid--transaction-id-not-history-position)
+- [Recipes](#recipes)
+    - [Protected route](#protected-route)
+    - [Nested layout](#nested-layout)
+    - [Data loading with loading / error UI](#data-loading-with-loading--error-ui)
+    - [React integration](#react-integration)
+    - [Vue integration](#vue-integration)
+    - [Custom 404 render](#custom-404-render)
+- [Subpath modules](#subpath-modules)
+    - [`@supercat1337/router/adapters`](#supercat1337routeradapters)
+    - [`@supercat1337/router/links`](#supercat1337routerlinks)
+    - [`@supercat1337/router/guard`](#supercat1337routerguard)
+- [SSR](#ssr)
+- [Public API cheat-sheet](#public-api-cheat-sheet)
+- [Examples](#examples)
+- [Comparison with specific routers](#comparison-with-specific-routers)
+- [Related packages](#related-packages)
+- [Contributing](#contributing)
+- [License](#license)
+- [For AI assistants](#for-ai-assistants)
 
 ---
 
@@ -15,8 +50,6 @@ Most SPA routers keep **one route tree** and use guards to simulate different co
 - multiple **independent maps** coexist, one per context;
 - navigation is a **synchronous, atomic transaction** — from `navigate()` to the last event, no `await`;
 - async is an explicit boundary: data loading lives in `afterEnter`, pre-navigation checks live in an optional guard layer, nothing leaks into the core.
-
-The trade-off is honest: no built-in lazy route splitting, no framework bindings, no async loaders in core. If you want those, use a framework router. If you want a deterministic engine where **switching context is a recomputation**, keep reading.
 
 | Concern            | `@supercat1337/router`                       | Typical SPA router                       |
 | ------------------ | -------------------------------------------- | ---------------------------------------- |
@@ -30,6 +63,23 @@ The trade-off is honest: no built-in lazy route splitting, no framework bindings
 | Framework coupling | None (core is framework-agnostic)            | Often framework-bound                    |
 | Type support       | Strict, zero transpilation (JSDoc + `.d.ts`) | TS sources + build step                  |
 
+Concretely: **TanStack Router** is stronger on typed routes and built-in loaders (React-only). **React Router v7** is stronger on ecosystem and framework ergonomics (React-only). **Vue Router** is stronger on simplicity and reactivity (Vue-only). This router trades those for **framework-agnostic core + synchronous transactions + state-relative maps** — a combination none of them offers.
+
+---
+
+## When NOT to use this router
+
+Be honest with yourself before choosing this router:
+
+- **You need built-in code-splitting / lazy routes** → TanStack Router or React Router v7.
+- **You need a built-in loader with cross-navigation cache and invalidation** → TanStack Router ships this in the core. Here you write it in `afterEnter` (or wait for the optional loader package).
+- **You want framework-bound ergonomics** (`useParams`, `<Link to>`, `useLoaderData`) out of the box → use the framework's router. Here you write ~30–50 lines of glue per framework.
+- **You need a large ecosystem of third-party integrations** → React Router / Vue Router.
+- **You need scroll restoration, focus management, transitions out of the box** → these are deliberately app responsibility.
+- **You're not prepared to write framework glue** → wait for the planned adapter packages, or use a framework router.
+
+If none of the above applies, keep reading.
+
 ---
 
 ## Installation
@@ -42,7 +92,7 @@ No runtime dependencies except `@supercat1337/event-emitter`, which is installed
 
 ### TypeScript
 
-The package ships with a complete `.d.ts` surface (`dist/types.d.ts` for the main entry, one per subpath). No transpilation, no build step on your side — types are generated from JSDoc and verified by `api-extractor` against a committed API report (`etc/*.api.md`).
+The package ships with a complete `.d.ts` surface (`dist/types.d.ts` for the main entry, one per subpath). No transpilation, no build step on your side — types are generated from JSDoc and verified by `api-extractor` against a committed API report.
 
 - **In JS projects:** add `// @ts-check` or set `checkJs: true` in `jsconfig.json` — you get strict IDE feedback and autocomplete on every call.
 - **In TS projects:** import types from `@supercat1337/router` (main entry). Subpaths (`./adapters`, `./links`, `./guard`) re-export values; types stay in the main entry to keep one canonical source.
@@ -54,10 +104,12 @@ What's typed:
 - Event payloads per event key: `router.on("afterEnter", p => …)` — `p` is `EventPayloads["afterEnter"]`.
 - `map.url(name, params)` and `map.match(url)` return the discriminated unions from the spec.
 
-What's _not_ typed (yet, by design — see `09-typing.md`):
+What's _not_ typed (by design, in the current contract):
 
-- Route-name inference: `url("profile")` accepts `string`, not `"profile" | "login"`. Generics like `createMap<Routes>` are a possible future feature, not in the current contract.
+- Route-name inference: `url("profile")` accepts `string`, not `"profile" | "login"`. Generics like `createMap<Routes>` are a possible future feature.
 - `params` keys are `Record<string, string>`, not per-route unions.
+
+Full signatures are in `dist/types.d.ts` (shipped in the npm package). A diff-friendly public-API report is kept at `etc/*.api.md` **in the GitHub repository** (not included in the npm package).
 
 ---
 
@@ -247,26 +299,188 @@ Not usable as: a history position, a back/forward indicator, or a "remount key" 
 
 ---
 
-## Data loading (async boundary)
+## Recipes
 
-The recommended pattern is **optimistic**: commit the RRU synchronously, render a skeleton, load data, render content. A loading failure is page state — it does **not** roll back the URL.
+### Protected route
+
+Use the optional guard layer. It runs guards over a **proposal** before the router commits; the core stays synchronous.
 
 ```js
+import { createGuardLayer } from '@supercat1337/router/guard';
+import { createPathAdapter } from '@supercat1337/router/adapters';
+
+const guard = createGuardLayer({
+    guards: [
+        async ({ url, from }) => {
+            if (!url.startsWith('/admin')) return 'allow';
+            const result = from.map.match(url);
+            return result.status === 'matched' ? 'allow' : { redirect: '/login' };
+        },
+    ],
+});
+
+const adapter = guard.wrapAdapter(createPathAdapter({ base: '/app/' }));
+const router = createRouter({ resolveMap, getState, adapter });
+
+guard.bind(router); // 1. bind first
+const nav = guard.navigate(); // 2. then build the navigator
+
+attachLinks(router, {
+    // 3. then wire links
+    navigate: nav.navigate,
+    replace: nav.replace,
+});
+```
+
+`nav.navigate` / `nav.replace` return `Promise<NavResult>`:
+
+```ts
+type NavResult = { status: 'committed'; snapshot: Snapshot } | { status: 'blocked' };
+```
+
+`guard.pending()` returns `{ url, since } | null` for loading UI. Guard errors (`guard-throw`, `guard-redirect-loop`, `invalid-rru`, `reentrancy`) go to `onError` with their own `GuardErrorType`, distinct from the core's `NavigationErrorType`.
+
+### Nested layout
+
+`layout` is app-owned metadata on `file()`. Pass it through, render it yourself by walking `snapshot.chain`:
+
+```js
+const map = createMap(
+    {
+        dashboard: folder(
+            {},
+            {
+                index: file({ name: 'dashboardHome', layout: 'dashboard' }),
+                settings: file({ name: 'dashboardSettings', layout: 'dashboard' }),
+            }
+        ),
+        login: file({ name: 'login' }), // no layout → default
+    },
+    { notFound: () => ({ view: '404' }) }
+);
+
+const layouts = {
+    main: renderMainLayout,
+    dashboard: renderDashboardLayout,
+};
+
+function render(snapshot) {
+    if (snapshot.status === 'notFound') {
+        return render404(snapshot.notFoundResult);
+    }
+    const leaf = snapshot.chain[snapshot.chain.length - 1];
+    const layoutName = leaf?.layout ?? 'main';
+    const layout = layouts[layoutName] ?? layouts.main;
+    return layout(snapshot);
+}
+```
+
+### Data loading with loading / error UI
+
+Optimistic: commit the RRU synchronously, render a skeleton, load data, render content. A loading failure is page state — it does **not** roll back the URL.
+
+```js
+let viewState = { loading: false, error: null, data: null };
+
 router.on('afterEnter', async ({ snapshot }) => {
     const id = snapshot.navigationId;
-    renderSkeleton(snapshot);
+    viewState = { loading: true, error: null, data: null };
+    render(viewState);
+
     try {
         const data = await loadData(snapshot);
         if (!router.isCurrent(id)) return; // superseded
-        renderContent(snapshot, data);
-    } catch (e) {
+        viewState = { loading: false, error: null, data };
+        render(viewState);
+    } catch (error) {
         if (!router.isCurrent(id)) return;
-        renderError(snapshot, e);
+        viewState = { loading: false, error, data: null };
+        render(viewState);
     }
 });
 ```
 
-"Route resolves" (blocking commit until data is loaded) is a **non-goal**: it contradicts the synchronous commit and `popstate` (the browser URL is already changed — rollback is impossible). For pre-navigation checks, use the optional guard layer.
+"Route resolves" (blocking commit until data is loaded) is a **non-goal**: it contradicts the synchronous commit and `popstate` (the browser URL is already changed — rollback is impossible). For pre-navigation checks, use the guard layer.
+
+### React integration
+
+`@supercat1337/router` is framework-agnostic. The glue is small but you write it once:
+
+```jsx
+import { useSyncExternalStore, useCallback } from 'react';
+
+const EVENTS = ['afterEnter', 'afterLeave', 'mapChanged', 'navigationError'];
+
+function useRouterSnapshot(router) {
+    const subscribe = useCallback(
+        onChange => {
+            const offs = EVENTS.map(e => router.on(e, onChange));
+            return () => offs.forEach(off => off());
+        },
+        [router]
+    );
+    return useSyncExternalStore(subscribe, () => router.getSnapshot());
+}
+
+function App({ router }) {
+    const snapshot = useRouterSnapshot(router);
+
+    if (snapshot.status === 'notFound') {
+        return <NotFound result={snapshot.notFoundResult} />;
+    }
+    if (snapshot.status === 'error') {
+        return <ErrorView error={snapshot.error} />;
+    }
+    const leaf = snapshot.chain[snapshot.chain.length - 1];
+    return renderByLeaf(leaf, snapshot.params);
+}
+```
+
+`router.getSnapshot()` returns a stable reference when nothing changed, which is what `useSyncExternalStore` requires.
+
+### Vue integration
+
+```js
+import { shallowRef, onMounted, onUnmounted } from 'vue';
+
+const EVENTS = ['afterEnter', 'afterLeave', 'mapChanged', 'navigationError'];
+
+export function useRouterSnapshot(router) {
+    const snapshot = shallowRef(router.getSnapshot());
+    let offs = [];
+
+    onMounted(() => {
+        offs = EVENTS.map(e =>
+            router.on(e, () => {
+                snapshot.value = router.getSnapshot();
+            })
+        );
+    });
+    onUnmounted(() => offs.forEach(off => off()));
+
+    return snapshot;
+}
+```
+
+### Custom 404 render
+
+`notFoundResult` is whatever your `notFound` handler returned. Render it however you like:
+
+```js
+const map = createMap(routes, {
+    notFound: ({ url, chain }) => ({
+        view: '404',
+        attemptedUrl: url,
+        partialChain: chain,
+    }),
+});
+
+router.on('afterEnter', ({ snapshot }) => {
+    if (snapshot.status === 'notFound') {
+        renderView(snapshot.notFoundResult);
+    }
+});
+```
 
 ---
 
@@ -303,105 +517,7 @@ All URL checks (`cross-origin`, `mailto:`, same-document hash, `#section` in has
 
 Optional async guard layer. Runs guards over a **proposal** before the router commits. The core remains synchronous; guards work outside the transaction. The only integration point into the core is `adapter.listen` (for `popstate`, where the browser URL has already changed and guards must run before `cb(e)`).
 
-Mandatory wiring order:
-
-```js
-import { createGuardLayer } from '@supercat1337/router/guard';
-
-const guard = createGuardLayer({
-    guards: [
-        async ({ url, from }) => {
-            if (!url.startsWith('/admin')) return 'allow';
-            const result = from.map.match(url);
-            return result.status === 'matched' ? 'allow' : { redirect: '/login' };
-        },
-    ],
-});
-
-const adapter = guard.wrapAdapter(createPathAdapter({ base: '/app/' }));
-const router = createRouter({ resolveMap, getState, adapter });
-
-guard.bind(router); // 1. bind first
-const nav = guard.navigate(); // 2. then build the navigator
-
-attachLinks(router, {
-    // 3. then wire links
-    navigate: nav.navigate,
-    replace: nav.replace,
-});
-```
-
-`nav.navigate` / `nav.replace` return `Promise<NavResult>`:
-
-```ts
-type NavResult = { status: 'committed'; snapshot: Snapshot } | { status: 'blocked' };
-```
-
-`guard.pending()` returns `{ url, since } | null` for loading UI. Guard errors (`guard-throw`, `guard-redirect-loop`, `invalid-rru`, `reentrancy`) go to `onError` with their own `GuardErrorType`, distinct from the core's `NavigationErrorType`.
-
-#### Multi-step guards with `@supercat1337/chain`
-
-A guard receives `signal` (an `AbortSignal` from the guard layer). It is aborted when a newer navigation starts **or** when the guard itself redirects — so any in-flight `fetch` should be cancelled. With one `fetch`, `fetch(url, { signal })` is enough. With **two or more sequential async steps**, coordinating cancellation by hand becomes boilerplate:
-
-```js
-// Without @supercat1337/chain — every `await` needs an abort check and try/catch
-const authGuard = async ({ url, signal }) => {
-    const session = await (await fetch('/api/session', { signal })).json();
-    if (signal.aborted) return { block: true };
-    if (!session.ok) return { redirect: '/login?next=' + encodeURIComponent(url) };
-
-    const perms = await (await fetch('/api/permissions?u=' + session.userId, { signal })).json();
-    if (signal.aborted) return { block: true };
-    if (url.startsWith('/admin') && !perms.includes('admin')) return { block: true };
-
-    await fetch('/api/preload?route=' + url, { signal }); // warm caches
-    if (signal.aborted) return { block: true };
-
-    return 'allow';
-};
-```
-
-`@supercat1337/chain` is a small utility that turns this into a linear, abort-aware workflow. Each step's `fetch` is bound to the same `signal`; early exit is `ctrl.complete(value)`; the rest is skipped. The same guard:
-
-```js
-import { Chain, CancelError } from '@supercat1337/chain';
-
-const authGuard = ({ url, signal }) => {
-    const chain = new Chain({ url }, { signal });
-
-    chain
-        .add(async (_, ctrl) => {
-            const session = await (await ctrl.fetch('/api/session')).json();
-            if (!session.ok) ctrl.complete({ redirect: '/login?next=' + encodeURIComponent(url) });
-            return session;
-        })
-        .add(async (session, ctrl) => {
-            const perms = await (await ctrl.fetch('/api/permissions?u=' + session.userId)).json();
-            if (url.startsWith('/admin') && !perms.includes('admin'))
-                ctrl.complete({ block: true });
-            return perms;
-        })
-        .add(async (_, ctrl) => {
-            await ctrl.fetch('/api/preload?route=' + url);
-            return null;
-        });
-
-    return chain.run().catch(e => {
-        if (e instanceof CancelError) return { block: true }; // silent abort → block
-        throw e; // real error → onError → block
-    });
-};
-```
-
-What you get: `signal` plumbing disappears (`ctrl.fetch` / `ctrl.wrap(fn)` / `ctrl.sleep(ms)` all honour it), early exit is explicit (`ctrl.complete`), and a cancelled navigation is a single `CancelError` to convert into `{ block: true }` — no per-step `if (signal.aborted)` checks.
-
-**When not to use it:** a guard that runs a single `fetch`, a synchronous permission check, or a step with heavy branching (`if step2 fails, try step2b`) is better as a plain async function. `Chain.js` earns its keep from ~2–3 sequential steps with cancellation; below that it's extra indirection.
-
-`@supercat1337/chain` is **not** a dependency of this package — install it only if your guards need it:
-
-```bash
-npm install @supercat1337/chain
-```
+Wiring order is mandatory — see [Protected route](#protected-route) above for a working example. Multi-step guards with cancellation can use `@supercat1337/chain` (see [Related packages](#related-packages)).
 
 ---
 
@@ -418,7 +534,7 @@ The core is synchronous; SSR is a natural fit.
 
 ---
 
-## Public API (cheat-sheet)
+## Public API cheat-sheet
 
 **Core** — `@supercat1337/router`:
 
@@ -457,22 +573,80 @@ FileMeta, FolderOptions, FileNode, FolderNode, Node, Children,
 NotFoundContext, NotFoundResult, NotFoundHandler, RedirectResult
 ```
 
-See `dist/types.d.ts` for full signatures; see `etc/*.api.md` for a diff-friendly public surface report.
+Full signatures: `dist/types.d.ts` (shipped in the npm package).
+
+The test suite (`tests/`) and the API report (`etc/*.api.md`) live **in the GitHub repository, not in the npm package**. On GitHub they are the canonical reference for edge cases and the diff-friendly public surface.
 
 ---
 
 ## Examples
 
-Live examples (a runnable SPA with guest / user / admin maps, path mode and hash mode, and a guard layer) are in progress and will be linked here. Until then, the **Quick Start** above is the canonical reference; the test suite (`tests/`) covers every documented behavior.
+The **Quick Start** above is the canonical reference. It exercises the full stack: two maps, a resolver, an adapter, links, event subscriptions, and both `navigate()` / `revalidate()`.
+
+For exhaustive behavior coverage (edge cases, error paths, redirect loops, guard interactions), see `tests/` **in the GitHub repository** — every documented behavior has a test that fails without the behavior. Start with `tests/router.test.js` and `tests/guard-layer.test.js`. (`tests/` is not included in the npm package.)
+
+A runnable SPA example (guest / user / admin maps, path mode + hash mode, guard layer) is planned for a separate example repository. Until then, `tests/` on GitHub is the living spec.
+
+---
+
+## Comparison with specific routers
+
+| Feature                          | `@supercat1337/router`     | TanStack Router (React) | React Router v7 (React) | Vue Router (Vue) |
+| -------------------------------- | -------------------------- | ----------------------- | ----------------------- | ---------------- |
+| Framework-agnostic               | ✅                         | ❌                      | ❌                      | ❌               |
+| Synchronous navigation           | ✅                         | ❌                      | ❌                      | ❌               |
+| State-relative maps              | ✅                         | ❌                      | ❌                      | ❌               |
+| Typed routes                     | ⚠️ plain `string`          | ✅ full inference       | ⚠️ partial              | ⚠️ partial       |
+| Built-in loaders / cache         | ❌ (write in `afterEnter`) | ✅                      | ✅ (v7)                 | ⚠️ guards        |
+| Built-in code splitting          | ❌                         | ✅                      | ✅                      | ✅               |
+| Cancellation in guards           | ✅ `AbortSignal`           | ⚠️ via redirect only    | ❌                      | ❌               |
+| Scroll restoration / transitions | ❌ (app responsibility)    | ⚠️ partial              | ✅                      | ✅               |
+| Ecosystem / third-party          | ⚠️ small                   | ✅ large                | ✅ very large           | ✅ very large    |
+
+**Choose `@supercat1337/router`** if you need framework-agnostic routing with a synchronous core and state-relative maps, and are prepared to write ~30–50 lines of glue per framework.
+
+**Choose TanStack Router** if you're on React and want typed routes + loaders + guards with the least code.
+
+**Choose React Router v7 / Vue Router** if you're on React / Vue, want a large ecosystem, and don't mind async navigation.
 
 ---
 
 ## Related packages
 
-| Package                       | Role                                                                                |
-| ----------------------------- | ----------------------------------------------------------------------------------- |
-| `@supercat1337/event-emitter` | Event bus used internally for `router.on / off / once`                              |
-| `@supercat1337/chain`         | Recommended inside guards that run several sequential async steps with cancellation |
+| Package                       | Role                                                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `@supercat1337/event-emitter` | Event bus used internally for `router.on / off / once`                                                  |
+| `@supercat1337/chain`         | Recommended inside guards that run several sequential async steps with cancellation                     |
+| `@supercat1337/fetcher`       | `AbortSignal`-aware HTTP client with retry and singleton requests — fits the `afterEnter` pattern well  |
+| `@supercat1337/persist-core`  | Framework-agnostic persistence (TTL, versioning, cross-tab sync) — useful for caching loaded route data |
+
+`@supercat1337/chain` is **not** a dependency of this package — install it only if your guards need it:
+
+```bash
+npm install @supercat1337/chain
+```
+
+---
+
+## Contributing
+
+Internal guide for contributors and AI assistants: see `AGENTS.md` **in the GitHub repository** (not included in the npm package). It documents invariants, common pitfalls, build pipeline, and test conventions.
+
+```bash
+git clone https://github.com/supercat1337/router
+cd router
+npm install
+npm test               # c8 + ava
+npm run build          # rollup + tsc + api-extractor
+```
+
+Every new behavior needs a test that fails without the change. Every public signature change requires an update to `etc/*.api.md` in the same PR.
+
+---
+
+## License
+
+MIT © Albert Bazaleev
 
 ---
 
@@ -480,15 +654,9 @@ Live examples (a runnable SPA with guest / user / admin maps, path mode and hash
 
 If you are generating code against this package:
 
-- The core is **framework-agnostic**. Do **not** introduce React / Vue / Svelte imports into `@supercat1337/router` source or suggest a framework-specific adapter inside the core. Adapters are separate packages.
+- The core is **framework-agnostic**. Do **not** introduce React / Vue / Svelte imports into `@supercat1337/router` source or suggest a framework-specific adapter inside the core. Framework glue is user-side (see [Recipes](#recipes)).
 - The core is **synchronous**. `resolveMap` and `notFound` must not return Promises — that is a contract violation diagnosed as `resolver-promise` / `notFound-promise`. Async belongs in `afterEnter` (data loading) or the optional guard layer.
 - Multiple independent maps are the intended pattern. Do **not** suggest cross-map features, cross-map redirects, or a "global route registry" — those do not exist by design.
-- Public surface is `dist/types.d.ts` and `etc/*.api.md`. Methods like `getHistory`, `dryMatch`, `getActiveMap`, `resolveMapFor`, `getRedirectPath` are **dev-only**, `@internal`, and stripped from the public `.d.ts`. Do not use them in library code.
+- Public surface is `dist/types.d.ts` (shipped in the npm package). A diff-friendly API report is at `etc/*.api.md` on GitHub. Methods like `getHistory`, `dryMatch`, `getActiveMap`, `resolveMapFor`, `getRedirectPath` are **dev-only**, `@internal`, and stripped from the public `.d.ts`. Do not use them in library code.
 - `Snapshot.url` is a **Router-relative URL** (RRU), not `location.pathname + search`. Browser URLs (BU) live only inside the adapter.
 - `navigationId` is a **transaction identifier**, not a history position and not a key for remounting components. Use it only for `router.isCurrent(id)` correlation of async work.
-
----
-
-## License
-
-MIT © Albert Bazaleev

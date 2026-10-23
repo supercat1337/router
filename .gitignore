@@ -8,3 +8,4 @@ dist/api-report-temp/
 .env
 package-lock.json
 debug.log
+notes.md
