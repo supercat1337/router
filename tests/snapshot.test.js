@@ -1,0 +1,222 @@
+// @ts-check
+
+import test from 'ava';
+import { file, folder } from '../src/data-model.js';
+import { createMap, kKeysMap } from '../src/map.js';
+import {
+    chainParams,
+    urlPrefixes,
+    commonChainPrefix,
+    buildSnapshot,
+    buildErrorSnapshot,
+} from '../src/snapshot.js';
+
+/** @type {import("../src/types.js").NotFoundHandler} */
+const nf = () => null;
+
+/**
+ * @param {any} map
+ * @returns {WeakMap<any, string>}
+ */
+function kmOf(map) {
+    return map[kKeysMap];
+}
+
+test('chainParams: matched uses params', t => {
+    const map = createMap({}, { notFound: nf });
+    const snap = {
+        navigationId: 1,
+        map,
+        status: /** @type {'matched'} */ ('matched'),
+        chain: [],
+        params: { id: '5' },
+        partialParams: {},
+        url: '/',
+    };
+    t.deepEqual(chainParams(snap), { id: '5' });
+});
+
+test('chainParams: notFound uses partialParams', t => {
+    const map = createMap({}, { notFound: nf });
+    const snap = {
+        navigationId: 1,
+        map,
+        status: /** @type {'notFound'} */ ('notFound'),
+        chain: [],
+        params: {},
+        partialParams: { id: '5' },
+        url: '/',
+    };
+    t.deepEqual(chainParams(snap), { id: '5' });
+});
+
+test('urlPrefixes: literal chain', t => {
+    const map = createMap(
+        { users: folder({}, { profile: file({ name: 'p' }) }) },
+        { notFound: nf }
+    );
+    const r = map.match('/users/profile');
+    if (r.status !== 'matched') return t.fail();
+    const snap = {
+        navigationId: 1,
+        map,
+        status: /** @type {'matched'} */ ('matched'),
+        chain: r.chain,
+        params: r.params,
+        partialParams: {},
+        url: '/users/profile',
+    };
+    t.deepEqual(urlPrefixes(r.chain, snap, kmOf(map)), ['/users', '/users/profile']);
+});
+
+test('urlPrefixes: :name decoded', t => {
+    const map = createMap({ users: folder({}, { ':id': file({ name: 'u' }) }) }, { notFound: nf });
+    const r = map.match('/users/%35');
+    if (r.status !== 'matched') return t.fail();
+    const snap = {
+        navigationId: 1,
+        map,
+        status: /** @type {'matched'} */ ('matched'),
+        chain: r.chain,
+        params: r.params,
+        partialParams: {},
+        url: '/users/%35',
+    };
+    t.deepEqual(urlPrefixes(r.chain, snap, kmOf(map)), ['/users', '/users/5']);
+});
+
+test('urlPrefixes: * uses full encoded pathname (no query)', t => {
+    const map = createMap({ '*': file({ name: 'any' }) }, { notFound: nf });
+    const r = map.match('/foo%20bar');
+    if (r.status !== 'matched') return t.fail();
+    const snap = {
+        navigationId: 1,
+        map,
+        status: /** @type {'matched'} */ ('matched'),
+        chain: r.chain,
+        params: r.params,
+        partialParams: {},
+        url: '/foo%20bar',
+    };
+    t.deepEqual(urlPrefixes(r.chain, snap, kmOf(map)), ['/foo%20bar']);
+});
+
+test('urlPrefixes: * strips query', t => {
+    const map = createMap({ '*': file({ name: 'any' }) }, { notFound: nf });
+    const r = map.match('/foo?tab=1');
+    if (r.status !== 'matched') return t.fail();
+    const snap = {
+        navigationId: 1,
+        map,
+        status: /** @type {'matched'} */ ('matched'),
+        chain: r.chain,
+        params: r.params,
+        partialParams: {},
+        url: '/foo?tab=1',
+    };
+    t.deepEqual(urlPrefixes(r.chain, snap, kmOf(map)), ['/foo']);
+});
+
+test('urlPrefixes: index = parent prefix', t => {
+    const map = createMap(
+        { admin: folder({}, { index: file({ name: 'adminHome' }) }) },
+        { notFound: nf }
+    );
+    const r = map.match('/admin');
+    if (r.status !== 'matched') return t.fail();
+    const snap = {
+        navigationId: 1,
+        map,
+        status: /** @type {'matched'} */ ('matched'),
+        chain: r.chain,
+        params: r.params,
+        partialParams: {},
+        url: '/admin',
+    };
+    t.deepEqual(urlPrefixes(r.chain, snap, kmOf(map)), ['/admin', '/admin']);
+});
+
+test('urlPrefixes: node not in keysMap → parent prefix', t => {
+    const fakeNode = file({ name: 'fake' });
+    const map = createMap({}, { notFound: nf });
+    const snap = {
+        navigationId: 1,
+        map,
+        status: /** @type {'matched'} */ ('matched'),
+        chain: [fakeNode],
+        params: {},
+        partialParams: {},
+        url: '/x',
+    };
+    t.deepEqual(urlPrefixes([fakeNode], snap, new WeakMap()), ['']);
+});
+
+test('commonChainPrefix: shared root', t => {
+    const map = createMap({ users: folder({}, { ':id': file({ name: 'u' }) }) }, { notFound: nf });
+    const r1 = map.match('/users/5');
+    const r2 = map.match('/users/6');
+    if (r1.status !== 'matched' || r2.status !== 'matched') return t.fail();
+    const prev = {
+        navigationId: 1,
+        map,
+        status: /** @type {'matched'} */ ('matched'),
+        chain: r1.chain,
+        params: r1.params,
+        partialParams: {},
+        url: '/users/5',
+    };
+    const next = {
+        navigationId: 2,
+        map,
+        status: /** @type {'matched'} */ ('matched'),
+        chain: r2.chain,
+        params: r2.params,
+        partialParams: {},
+        url: '/users/6',
+    };
+    t.is(commonChainPrefix(prev, next, kmOf), 1);
+});
+
+test('buildSnapshot: notFound attaches notFoundResult', t => {
+    const map = createMap({}, { notFound: nf });
+    const snap = buildSnapshot(1, map, 'notFound', [], {}, {}, '/x', 'render');
+    t.is(snap.notFoundResult, 'render');
+});
+
+test('buildSnapshot: matched skips notFoundResult', t => {
+    const map = createMap({}, { notFound: nf });
+    const snap = buildSnapshot(1, map, 'matched', [], {}, {}, '/x');
+    t.is(snap.notFoundResult, undefined);
+});
+
+test('buildErrorSnapshot: anchored to prev', t => {
+    const map = createMap({ login: file({ name: 'login' }) }, { notFound: nf });
+    const r = map.match('/login');
+    if (r.status !== 'matched') return t.fail();
+    const prev = {
+        navigationId: 1,
+        map,
+        status: /** @type {'matched'} */ ('matched'),
+        chain: r.chain,
+        params: r.params,
+        partialParams: {},
+        url: '/login',
+    };
+    const err = buildErrorSnapshot(
+        2,
+        prev,
+        'resolver-throw',
+        {
+            error: new Error('x'),
+            attemptedUrl: '/bad',
+            partialChain: [],
+            partialParams: {},
+        },
+        '/login'
+    );
+    t.is(err.status, 'error');
+    t.is(err.map, map);
+    t.is(err.chain, prev.chain);
+    t.deepEqual(err.params, {});
+    t.deepEqual(err.partialParams, prev.params);
+});

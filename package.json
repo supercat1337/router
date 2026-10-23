@@ -1,0 +1,92 @@
+{
+    "name": "@supercat1337/router",
+    "version": "0.1.0",
+    "description": "Synchronous state-relative router for SPA and SSR over a tree of JS objects.",
+    "author": "Albert Bazaleev",
+    "license": "MIT",
+    "type": "module",
+    "sideEffects": false,
+    "exports": {
+        ".": {
+            "types": "./dist/types.d.ts",
+            "import": "./dist/router.esm.js"
+        },
+        "./adapters": {
+            "types": "./dist/adapters.d.ts",
+            "import": "./dist/adapters.esm.js"
+        },
+        "./links": {
+            "types": "./dist/links.d.ts",
+            "import": "./dist/links.esm.js"
+        },
+        "./guard": {
+            "types": "./dist/guard.d.ts",
+            "import": "./dist/guard.esm.js"
+        }
+    },
+    "types": "dist/types.d.ts",
+    "scripts": {
+        "test": "c8 ava",
+        "clean": "shx rm -rf ./dist && shx mkdir ./dist",
+        "build_esm": "rollup ./src/index.js --file ./dist/router.esm.js --format es && rollup ./src/adapters.js --file ./dist/adapters.esm.js --format es && rollup ./src/links.js --file ./dist/links.esm.js --format es && rollup ./src/guard.js --file ./dist/guard.esm.js --format es",
+        "build_esm_bundle": "esbuild ./src/index.js --format=esm --bundle --platform=neutral --outfile=./dist/router.esm.bundle.js && esbuild ./src/adapters.js --format=esm --bundle --platform=neutral --outfile=./dist/adapters.esm.bundle.js && esbuild ./src/links.js --format=esm --bundle --platform=neutral --outfile=./dist/links.esm.bundle.js && esbuild ./src/guard.js --format=esm --bundle --platform=neutral --outfile=./dist/guard.esm.bundle.js",
+        "gen_types": "npx tsc --project my.tsconfig.types.json && shx cp src/index.d.ts dist/types-temp/src/index.d.ts && shx cp src/adapters.d.ts dist/types-temp/src/adapters.d.ts && shx cp src/links.d.ts dist/types-temp/src/links.d.ts && shx cp src/guard.d.ts dist/types-temp/src/guard.d.ts",
+        "bundle_types": "api-extractor run --local -c api-extractor.json && api-extractor run --local -c api-extractor.adapters.json && api-extractor run --local -c api-extractor.links.json && api-extractor run --local -c api-extractor.guard.json",
+        "build": "npm run clean && npm run build_esm && npm run build_esm_bundle && npm run gen_types && npm run bundle_types && shx rm -rf dist/types-temp",
+        "lint": "eslint src/ tests/",
+        "prepublishOnly": "npm run build && npm test"
+    },
+    "devDependencies": {
+        "@microsoft/api-extractor": "^7.59.4",
+        "ava": "^8.0.1",
+        "c8": "^9.1.0",
+        "esbuild": "^0.24.0",
+        "rollup": "^4.60.1",
+        "shx": "^0.4.0"
+    },
+    "keywords": [
+        "router",
+        "spa",
+        "ssr",
+        "routing",
+        "state-relative"
+    ],
+    "publishConfig": {
+        "registry": "https://registry.npmjs.org"
+    },
+    "homepage": "https://github.com/supercat1337/router",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/supercat1337/router.git"
+    },
+    "files": [
+        "dist/router.esm.js",
+        "dist/router.esm.bundle.js",
+        "dist/adapters.esm.js",
+        "dist/adapters.esm.bundle.js",
+        "dist/links.esm.js",
+        "dist/links.esm.bundle.js",
+        "dist/guard.esm.js",
+        "dist/guard.esm.bundle.js",
+        "dist/types.d.ts",
+        "dist/adapters.d.ts",
+        "dist/links.d.ts",
+        "dist/guard.d.ts",
+        "README.md",
+        "LICENSE.txt"
+    ],
+    "ava": {
+        "files": [
+            "tests/**/*.test.js"
+        ],
+        "nodeArguments": [
+            "--experimental-vm-modules"
+        ],
+        "extensions": [
+            "js"
+        ]
+    },
+    "dependencies": {
+        "@supercat1337/event-emitter": "^3.0.0"
+    }
+}
