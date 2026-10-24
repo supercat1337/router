@@ -3,6 +3,7 @@ var FILE_BRAND = Symbol("spa-router.file");
 var FOLDER_BRAND = Symbol("spa-router.folder");
 var MAP_BRAND = Symbol("spa-router.map");
 var REDIRECT_BRAND = Symbol("spa-router.redirect");
+var ROUTER_BRAND = Symbol("spa-router.router");
 
 // src/data-model.js
 function file(meta) {
@@ -1529,7 +1530,7 @@ function createRouter(options) {
   function subscribe(listener) {
     return eventBus.on("commit", ({ snapshot }) => listener(snapshot));
   }
-  return {
+  const router = {
     adapter,
     navigate,
     replace,
@@ -1559,6 +1560,13 @@ function createRouter(options) {
     resolveMapFor,
     getRedirectPath
   };
+  Object.defineProperty(router, ROUTER_BRAND, { value: true });
+  Object.defineProperty(router, Symbol.toStringTag, { value: "Router" });
+  return router;
+}
+function isRouter(x) {
+  return x !== null && typeof x === "object" && /** @type {any} */
+  x[ROUTER_BRAND] === true;
 }
 export {
   MapValidationError,
@@ -1571,6 +1579,7 @@ export {
   isFolder,
   isMap,
   isRedirect,
+  isRouter,
   normalizeRRU,
   redirect
 };

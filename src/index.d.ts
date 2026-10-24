@@ -96,10 +96,10 @@ export declare function file<const M extends FileMeta>(meta: M): FileNode<M>;
  *
  * @public
  */
-export declare function folder<
-    const O extends FolderOptions,
-    const C extends Children,
->(options: O, children: C): FolderNode<O, C>;
+export declare function folder<const O extends FolderOptions, const C extends Children>(
+    options: O,
+    children: C
+): FolderNode<O, C>;
 
 /**
  * Create an immutable router map.
@@ -218,7 +218,15 @@ export declare function normalizeRRU(url: string): string;
  *
  * @public
  */
-export declare function createRouter<
-    S = any,
-    R extends RouterMap = RouterMap,
->(options: CreateRouterOptions<S, R>): Router<S, R>;
+export declare function createRouter<S = any, R extends RouterMap = RouterMap>(
+    options: CreateRouterOptions<S, R>
+): Router<S, R>;
+
+/**
+ * Brand check for a `Router`. The only supported way to detect one at
+ * runtime — `instanceof` will not work, and structural lookalikes return
+ * `false`. The brand is a private `Symbol` set by `createRouter`.
+ *
+ * @public
+ */
+export declare function isRouter(x: unknown): x is Router;

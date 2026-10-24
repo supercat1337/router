@@ -22,6 +22,7 @@ var FILE_BRAND = Symbol("spa-router.file");
 var FOLDER_BRAND = Symbol("spa-router.folder");
 var MAP_BRAND = Symbol("spa-router.map");
 var REDIRECT_BRAND = Symbol("spa-router.redirect");
+var ROUTER_BRAND = Symbol("spa-router.router");
 
 // src/redirect.js
 function isRedirect(x) {
@@ -1136,7 +1137,7 @@ function createRouter(options) {
   function subscribe(listener) {
     return eventBus.on("commit", ({ snapshot }) => listener(snapshot));
   }
-  return {
+  const router = {
     adapter,
     navigate,
     replace,
@@ -1166,6 +1167,9 @@ function createRouter(options) {
     resolveMapFor,
     getRedirectPath
   };
+  Object.defineProperty(router, ROUTER_BRAND, { value: true });
+  Object.defineProperty(router, Symbol.toStringTag, { value: "Router" });
+  return router;
 }
 
 // src/guard.js

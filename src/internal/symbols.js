@@ -11,13 +11,16 @@
  */
 
 /** @type {unique symbol} */
-export const FILE_BRAND = Symbol("spa-router.file");
+export const FILE_BRAND = Symbol('spa-router.file');
 
 /** @type {unique symbol} */
-export const FOLDER_BRAND = Symbol("spa-router.folder");
+export const FOLDER_BRAND = Symbol('spa-router.folder');
 
 /** @type {unique symbol} */
-export const MAP_BRAND = Symbol("spa-router.map");
+export const MAP_BRAND = Symbol('spa-router.map');
 
 /** @type {unique symbol} */
-export const REDIRECT_BRAND = Symbol("spa-router.redirect");
+export const REDIRECT_BRAND = Symbol('spa-router.redirect');
+
+/** @type {unique symbol} */
+export const ROUTER_BRAND = Symbol('spa-router.router');

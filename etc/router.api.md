@@ -41,10 +41,9 @@ options: { notFound: NotFoundHandler }
 ): RouterMap<RouteNames<T>>;
 
 // @public
-export function createRouter<
-S = any,
-R extends RouterMap = RouterMap,
->(options: CreateRouterOptions<S, R>): Router<S, R>;
+export function createRouter<S = any, R extends RouterMap = RouterMap>(
+options: CreateRouterOptions<S, R>
+): Router<S, R>;
 
 // @public
 export interface CreateRouterOptions<S = any, R extends RouterMap = RouterMap> {
@@ -124,10 +123,10 @@ export interface FileNode<M = FileMeta> {
 }
 
 // @public
-export function folder<
-const O extends FolderOptions,
-const C extends Children,
->(options: O, children: C): FolderNode<O, C>;
+export function folder<const O extends FolderOptions, const C extends Children>(
+options: O,
+children: C
+): FolderNode<O, C>;
 
 // @public
 export interface FolderNode<O = FolderOptions, C = Children> {
@@ -209,6 +208,9 @@ export function isMap(x: unknown): x is RouterMap;
 
 // @public
 export function isRedirect(x: unknown): x is RedirectResult;
+
+// @public
+export function isRouter(x: unknown): x is Router;
 
 // @public
 export class MapValidationError extends Error {

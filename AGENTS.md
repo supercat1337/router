@@ -233,6 +233,7 @@ onMounted(() => {
 | `isFile(x)`     | `→ boolean` | Brand check for `FileNode`       |
 | `isFolder(x)`   | `→ boolean` | Brand check for `FolderNode`     |
 | `isMap(x)`      | `→ boolean` | Brand check for `RouterMap`      |
+| `isRouter(x)`   | `→ boolean` | Brand check for `Router`         |
 | `isRedirect(x)` | `→ boolean` | Brand check for `RedirectResult` |
 
 **Do not** replace these with structural checks (`'name' in x`) or `instanceof` — brands are identity checks against a private `Symbol`, and structural lookalikes will pass falsely.
@@ -243,6 +244,11 @@ onMounted(() => {
 const leaf = snapshot.leaf;
 if (isFile(leaf)) console.log(leaf.name); // narrowed
 ```
+
+`isRouter` is the runtime check for the object returned by `createRouter`. It
+uses a private `Symbol` — a structural lookalike (an object with the same
+methods) returns `false`. This matters when a plugin or devtools tool needs
+to confirm "this is a real router" before subscribing or inspecting it.
 
 ---
 

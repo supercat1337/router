@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>@supercat1337/router — vanilla SPA</title>
+
+        <!--
+    Import map: resolves bare specifiers to the router's ESM bundles.
+    The JS code below is written exactly as a production consumer would:
+
+        import { createMap } from '@supercat1337/router';
+
+    Compare with a bundler (Vite / webpack / esbuild), which reads the same
+    bare specifiers and resolves them via package.json "exports". The import
+    map is the browser-native equivalent for no-bundler / CDN scenarios.
+
+    For production via CDN, replace the three values with:
+
+        "https://cdn.jsdelivr.net/npm/@supercat1337/router@0.2.0/dist/router.esm.bundle.js"
+        "https://cdn.jsdelivr.net/npm/@supercat1337/router@0.2.0/dist/adapters.esm.bundle.js"
+        "https://cdn.jsdelivr.net/npm/@supercat1337/router@0.2.0/dist/links.esm.bundle.js"
+
+    Or, to see the canonical tree-shakeable builds (npm publishes these as
+    "import" targets in package.json "exports"), use the .esm.js variants
+    and add an entry for the runtime dependency:
+
+        "@supercat1337/router": "/dist/router.esm.js"
+        "@supercat1337/router/adapters": "/dist/adapters.esm.js"
+        "@supercat1337/router/links": "/dist/links.esm.js"
+        "@supercat1337/event-emitter": "https://cdn.jsdelivr.net/npm/@supercat1337/event-emitter@3.0.0/+esm"
+  -->
+        <script type="importmap">
+            {
+                "imports": {
+                    "@supercat1337/router": "/dist/router.esm.bundle.js",
+                    "@supercat1337/router/adapters": "/dist/adapters.esm.bundle.js",
+                    "@supercat1337/router/links": "/dist/links.esm.bundle.js"
+                }
+            }
+        </script>
+
+        <style>
+            :root {
+                --fg: #1a1a1a;
+                --bg: #fafafa;
+                --accent: #2563eb;
+                --muted: #6b7280;
+                --border: #e5e7eb;
+            }
+            @media (prefers-color-scheme: dark) {
+                :root {
+                    --fg: #e5e7eb;
+                    --bg: #0f172a;
+                    --accent: #60a5fa;
+                    --muted: #94a3b8;
+                    --border: #1e293b;
+                }
+            }
+            * {
+                box-sizing: border-box;
+            }
+            body {
+                font:
+                    16px/1.6 system-ui,
+                    sans-serif;
+                max-width: 720px;
+                margin: 0 auto;
+                padding: 2rem 1rem;
+                color: var(--fg);
+                background: var(--bg);
+            }
+            header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding-bottom: 1rem;
+                border-bottom: 1px solid var(--border);
+                margin-bottom: 2rem;
+                gap: 1rem;
+                flex-wrap: wrap;
+            }
+            nav {
+                display: flex;
+                gap: 1rem;
+                flex-wrap: wrap;
+            }
+            nav a {
+                color: var(--accent);
+                text-decoration: none;
+            }
+            nav a:hover {
+                text-decoration: underline;
+            }
+            button {
+                font: inherit;
+                padding: 0.3rem 0.8rem;
+                border: 1px solid var(--accent);
+                background: transparent;
+                color: var(--accent);
+                border-radius: 4px;
+                cursor: pointer;
+                margin-left: 0.5rem;
+            }
+            button:hover {
+                background: var(--accent);
+                color: var(--bg);
+            }
+            code {
+                background: var(--border);
+                padding: 0.1rem 0.3rem;
+                border-radius: 3px;
+                font-size: 0.9em;
+            }
+            pre {
+                background: var(--border);
+                padding: 1rem;
+                border-radius: 4px;
+                overflow-x: auto;
+                font-size: 0.85em;
+            }
+            .badge {
+                display: inline-block;
+                padding: 0.1rem 0.5rem;
+                border-radius: 999px;
+                background: var(--accent);
+                color: var(--bg);
+                font-size: 0.75em;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+            }
+            .muted {
+                color: var(--muted);
+            }
+            #auth {
+                display: flex;
+                gap: 0.5rem;
+                align-items: center;
+            }
+        </style>
+    </head>
+    <body>
+        <header>
+            <nav>
+                <a href="/examples/vanilla-spa/" data-router-link>Home</a>
+                <a href="/examples/vanilla-spa/about" data-router-link>About</a>
+                <a href="/examples/vanilla-spa/profile" data-router-link>Profile</a>
+            </nav>
+            <div id="auth"></div>
+        </header>
+        <main id="view"><p class="muted">Loading…</p></main>
+        <script type="module" src="./main.js"></script>
+    </body>
+</html>

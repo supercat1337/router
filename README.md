@@ -690,8 +690,8 @@ The core is synchronous; SSR is a natural fit.
 
 ```
 createMap, file, folder, isMap, isFile, isFolder,
-createRouter, redirect, isRedirect, MapValidationError, normalizeRRU,
-hasRoute
+createRouter, isRouter, redirect, isRedirect, MapValidationError, normalizeRRU,
+ hasRoute
 ```
 
 **Adapters** — `@supercat1337/router/adapters`:
@@ -742,11 +742,22 @@ The test suite (`tests/`) and the API report (`etc/*.api.md`) live **in the GitH
 
 ## Examples
 
-The **Quick Start** above is the canonical reference. It exercises the full stack: two maps, a resolver, an adapter, links, `subscribe`, and both `navigate()` / `revalidate()`.
+- **`examples/vanilla-spa/`** — ~85-line SPA with two maps, a pure
+  `resolveMap`, `attachLinks`, `subscribe`, and `revalidate`. No
+  framework, no bundler. Run from the repo root:
+    ```bash
+    npx serve .
+    # open http://localhost:3000/examples/vanilla-spa/
+    ```
 
-For exhaustive behavior coverage (edge cases, error paths, redirect loops, guard interactions), see `tests/` **in the GitHub repository** — every documented behavior has a test that fails without the behavior. Start with `tests/transaction.test.js`, `tests/guard.test.js`, and `tests/subscribe.test.js`. (`tests/` is not included in the npm package.)
+The **Quick Start** above is the canonical reference. It exercises the
+same stack in a single file, without a directory structure.
 
-A runnable SPA example (guest / user / admin maps, path mode + hash mode, guard layer) is planned for a separate example repository. Until then, `tests/` on GitHub is the living spec.
+For exhaustive behavior coverage (edge cases, error paths, redirect
+loops, guard interactions), see `tests/` **in the GitHub repository** —
+every documented behavior has a test that fails without the behavior.
+Start with `tests/transaction.test.js`, `tests/guard.test.js`, and
+`tests/subscribe.test.js`. (`tests/` is not included in the npm package.)
 
 ---
 

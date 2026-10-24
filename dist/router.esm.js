@@ -13,16 +13,19 @@ import { EventEmitter } from '@supercat1337/event-emitter';
  */
 
 /** @type {unique symbol} */
-const FILE_BRAND = Symbol("spa-router.file");
+const FILE_BRAND = Symbol('spa-router.file');
 
 /** @type {unique symbol} */
-const FOLDER_BRAND = Symbol("spa-router.folder");
+const FOLDER_BRAND = Symbol('spa-router.folder');
 
 /** @type {unique symbol} */
-const MAP_BRAND = Symbol("spa-router.map");
+const MAP_BRAND = Symbol('spa-router.map');
 
 /** @type {unique symbol} */
-const REDIRECT_BRAND = Symbol("spa-router.redirect");
+const REDIRECT_BRAND = Symbol('spa-router.redirect');
+
+/** @type {unique symbol} */
+const ROUTER_BRAND = Symbol('spa-router.router');
 
 // @ts-check
 
@@ -1639,7 +1642,7 @@ function createRouter(options) {
         return eventBus.on('commit', ({ snapshot }) => listener(snapshot));
     }
 
-    return {
+    const router = {
         adapter,
         navigate,
         replace,
@@ -1666,6 +1669,24 @@ function createRouter(options) {
         resolveMapFor,
         getRedirectPath,
     };
+
+    Object.defineProperty(router, ROUTER_BRAND, { value: true });
+    Object.defineProperty(router, Symbol.toStringTag, { value: 'Router' });
+
+    return router;
 }
 
-export { MapValidationError, createMap, createRouter, file, folder, hasRoute, isFile, isFolder, isMap, isRedirect, normalizeRRU, redirect };
+/**
+ * Brand check for a `Router`. The only supported way to detect one at
+ * runtime — `instanceof` will not work, and structural lookalikes return
+ * `false`. The brand is a private `Symbol` set by `createRouter`.
+ *
+ * @public
+ * @param {unknown} x
+ * @returns {x is import('./types.js').Router}
+ */
+function isRouter(x) {
+    return x !== null && typeof x === 'object' && /** @type {any} */ (x)[ROUTER_BRAND] === true;
+}
+
+export { MapValidationError, createMap, createRouter, file, folder, hasRoute, isFile, isFolder, isMap, isRedirect, isRouter, normalizeRRU, redirect };

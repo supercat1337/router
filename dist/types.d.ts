@@ -101,10 +101,9 @@ options: { notFound: NotFoundHandler }
  *
  * @public
  */
-export declare function createRouter<
-S = any,
-R extends RouterMap = RouterMap,
->(options: CreateRouterOptions<S, R>): Router<S, R>;
+export declare function createRouter<S = any, R extends RouterMap = RouterMap>(
+options: CreateRouterOptions<S, R>
+): Router<S, R>;
 
 /**
  * Options accepted by `createRouter`.
@@ -272,10 +271,10 @@ export declare interface FileNode<M = FileMeta> {
  *
  * @public
  */
-export declare function folder<
-const O extends FolderOptions,
-const C extends Children,
->(options: O, children: C): FolderNode<O, C>;
+export declare function folder<const O extends FolderOptions, const C extends Children>(
+options: O,
+children: C
+): FolderNode<O, C>;
 
 declare const FOLDER_BRAND: unique symbol;
 
@@ -458,6 +457,15 @@ export declare function isMap(x: unknown): x is RouterMap;
  * @public
  */
 export declare function isRedirect(x: unknown): x is RedirectResult;
+
+/**
+ * Brand check for a `Router`. The only supported way to detect one at
+ * runtime — `instanceof` will not work, and structural lookalikes return
+ * `false`. The brand is a private `Symbol` set by `createRouter`.
+ *
+ * @public
+ */
+export declare function isRouter(x: unknown): x is Router;
 
 /**
  * Thrown by `createMap` when a tree-wide invariant is violated.

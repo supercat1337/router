@@ -1,5 +1,6 @@
 // @ts-check
 
+import { ROUTER_BRAND } from './internal/symbols.js';
 import { createEventBus } from './events.js';
 import { runTransaction } from './transaction.js';
 import { isMap } from './map.js';
@@ -273,7 +274,7 @@ export function createRouter(options) {
         return eventBus.on('commit', ({ snapshot }) => listener(snapshot));
     }
 
-    return {
+    const router = {
         adapter,
         navigate,
         replace,
@@ -300,4 +301,22 @@ export function createRouter(options) {
         resolveMapFor,
         getRedirectPath,
     };
+
+    Object.defineProperty(router, ROUTER_BRAND, { value: true });
+    Object.defineProperty(router, Symbol.toStringTag, { value: 'Router' });
+
+    return router;
+}
+
+/**
+ * Brand check for a `Router`. The only supported way to detect one at
+ * runtime — `instanceof` will not work, and structural lookalikes return
+ * `false`. The brand is a private `Symbol` set by `createRouter`.
+ *
+ * @public
+ * @param {unknown} x
+ * @returns {x is import('./types.js').Router}
+ */
+export function isRouter(x) {
+    return x !== null && typeof x === 'object' && /** @type {any} */ (x)[ROUTER_BRAND] === true;
 }

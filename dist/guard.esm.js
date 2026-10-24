@@ -49,10 +49,13 @@ function isValidRRU(url) {
 
 
 /** @type {unique symbol} */
-const MAP_BRAND = Symbol("spa-router.map");
+const MAP_BRAND = Symbol('spa-router.map');
 
 /** @type {unique symbol} */
-const REDIRECT_BRAND = Symbol("spa-router.redirect");
+const REDIRECT_BRAND = Symbol('spa-router.redirect');
+
+/** @type {unique symbol} */
+const ROUTER_BRAND = Symbol('spa-router.router');
 
 // @ts-check
 
@@ -947,7 +950,7 @@ function createRouter(options) {
         return eventBus.on('commit', ({ snapshot }) => listener(snapshot));
     }
 
-    return {
+    const router = {
         adapter,
         navigate,
         replace,
@@ -974,6 +977,11 @@ function createRouter(options) {
         resolveMapFor,
         getRedirectPath,
     };
+
+    Object.defineProperty(router, ROUTER_BRAND, { value: true });
+    Object.defineProperty(router, Symbol.toStringTag, { value: 'Router' });
+
+    return router;
 }
 
 // @ts-check
