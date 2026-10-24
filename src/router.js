@@ -305,6 +305,23 @@ export function createRouter(options) {
     Object.defineProperty(router, ROUTER_BRAND, { value: true });
     Object.defineProperty(router, Symbol.toStringTag, { value: 'Router' });
 
+    // Dev-only: hand the router to a devtools hook, if one is installed.
+    // This is not a public API — it's a side channel extensions discover
+    // by name. The contract: `register(router)` is called synchronously
+    // before `createRouter` returns; if it throws, the error is swallowed
+    // (devtools must never break the app). Multiple routers → multiple
+    // `register` calls; no `unregister` (routers live for the page lifetime).
+    if (isDev) {
+        const hook = /** @type {any} */ (globalThis).__SUPERCAT_ROUTER_DEVTOOLS__;
+        if (hook && typeof hook.register === 'function') {
+            try {
+                hook.register(router);
+            } catch {
+                // Silent: devtools hooks must not interfere with navigation.
+            }
+        }
+    }
+
     return router;
 }
 

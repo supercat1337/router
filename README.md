@@ -27,6 +27,9 @@ A framework-agnostic routing engine where the active route tree is a **pure func
     - [Protected route](#protected-route)
     - [Nested layout](#nested-layout)
     - [Data loading with loading / error UI](#data-loading-with-loading--error-ui)
+    - [Code splitting](#code-splitting)
+    - [Preload before navigate](#preload-before-navigate)
+    - [Devtools](#devtools)
     - [Validating route names from data](#validating-route-names-from-data)
     - [React integration](#react-integration)
     - [Vue integration](#vue-integration)
@@ -509,6 +512,165 @@ router.on('afterEnter', async ({ snapshot }) => {
 ```
 
 "Route resolves" (blocking commit until data is loaded) is a **non-goal**: it contradicts the synchronous commit and `popstate` (the browser URL is already changed — rollback is impossible). For pre-navigation checks, use the guard layer.
+
+### Code splitting
+
+The route tree is known at startup — it's a map, and `map.match()` must stay
+synchronous. Lazy loading is therefore **content-level**, not tree-level: file
+nodes carry an optional `load` function as app-owned metadata, and the view
+module is fetched in `afterEnter`.
+
+```js
+import { createMap, file, folder, isFile } from '@supercat1337/router';
+
+const map = createMap(
+    {
+        login: file({ name: 'login', load: () => import('./views/login.js') }),
+        profile: file({ name: 'profile', load: () => import('./views/profile.js') }),
+        admin: folder(
+            {},
+            {
+                users: file({ name: 'adminUsers', load: () => import('./views/admin-users.js') }),
+            }
+        ),
+    },
+    { notFound }
+);
+
+// Cache loaded modules by route name. `name` is unique per map (enforced
+// by createMap), so a plain Map is safe.
+const loaded = new Map();
+
+router.on('afterEnter', async ({ snapshot }) => {
+    const leaf = snapshot.leaf;
+    if (!isFile(leaf) || !leaf.load) return;
+
+    const id = snapshot.navigationId;
+
+    let mod = loaded.get(leaf.name);
+    if (!mod) {
+        mod = await leaf.load();
+        loaded.set(leaf.name, mod);
+    }
+
+    if (!router.isCurrent(id)) return; // superseded — discard result
+    mod.render(snapshot);
+});
+```
+
+What this gives you:
+
+- **Synchronous matching.** `map.match()` never awaits — the state-relative
+  contract holds. Only the view module is deferred.
+- **Deduplication.** Repeated `navigate()` to the same route reuses the cached
+  module; no double `import()`.
+- **Race safety.** `isCurrent(id)` discards results for superseded
+  transactions (slow module, fast back/forward).
+- **App-owned cache.** `Map`, LRU, IndexedDB, or a preloading service — the
+  router does not know or care.
+
+Don't try to make the **tree** lazy. `resolveMap` must return a `RouterMap`
+synchronously; a `Promise<RouterMap>` is a contract violation
+(`resolver-promise`). If you need lazy route definitions, use TanStack Router.
+
+### Preload before navigate
+
+If a route must have its data **before** the URL commits (blocking loader),
+run it in the guard layer — not in `afterEnter`. The core stays synchronous;
+`popstate` rollback is handled by the guard's `wrapAdapter`.
+
+```js
+import { createGuardedRouter } from '@supercat1337/router/guard';
+import { isFile } from '@supercat1337/router';
+
+const { router, nav } = createGuardedRouter({
+    adapter,
+    resolveMap,
+    getState,
+    guards: [
+        async ({ url, from, signal }) => {
+            const match = from.map.match(url);
+            if (match.status !== 'matched') return 'allow';
+
+            const leaf = match.leaf;
+            if (!isFile(leaf) || !leaf.preload) return 'allow';
+
+            try {
+                await leaf.preload({ signal });
+                return 'allow';
+            } catch (e) {
+                if (/** @type {Error} */ (e).name === 'AbortError') {
+                    return { block: true }; // newer nav — silently cancel
+                }
+                return { redirect: '/error' }; // loader failed
+            }
+        },
+    ],
+});
+
+attachLinks(router, { navigate: nav.navigate, replace: nav.replace });
+```
+
+Key properties:
+
+- **Only `nav.navigate()` / `nav.replace()` block.** Plain `router.navigate()`
+  remains synchronous — guards don't run for it. Use `router.navigate()` for
+  non-blocking transitions (e.g. optimistic `afterEnter` flow above).
+- **`popstate` rollback works.** The guard's `wrapAdapter` writes the previous
+  URL back if a guard blocks — safe because the browser already changed the
+  URL, and rollback happens before the router sees a commit.
+- **Cancellation via `signal`.** Fires when a newer navigation starts.
+- **No cache in the core.** `leaf.preload` is your function — put the cache
+  inside it, or use `@supercat1337/chain` / `@supercat1337/fetcher`.
+
+Do **not** add blocking loaders to the core. `popstate` + `await` + rollback
+is a known source of double-navigation bugs in async routers; keeping the
+core synchronous is the whole point.
+
+### Devtools
+
+The router exposes a **dev-only side channel** so devtools extensions can
+discover and inspect live router instances — without any of it being part of
+the public API.
+
+Install the hook **before** calling `createRouter`:
+
+```js
+globalThis.__SUPERCAT_ROUTER_DEVTOOLS__ = {
+    register(router) {
+        // Called synchronously from createRouter (dev mode only).
+        // The router has the full runtime surface:
+        //   router.getSnapshot()   → current committed Snapshot
+        //   router.getHistory()    → last 50 committed snapshots (dev-only)
+        //   router.subscribe(fn)   → every future commit
+        //   router.adapter.base    → distinguishes multiple routers
+        myDevtoolsPanel.attach(router);
+    },
+};
+
+const router = createRouter({ resolveMap, getState, adapter });
+// → __SUPERCAT_ROUTER_DEVTOOLS__.register(router) has been called
+```
+
+Contract:
+
+- Read from `globalThis.__SUPERCAT_ROUTER_DEVTOOLS__` **inside** `createRouter`,
+  only when `dev: true` (or `NODE_ENV !== 'production'`).
+- `register(router)` is called synchronously before `createRouter` returns.
+- If `register` throws, the error is swallowed — devtools must not break the
+  app.
+- Multiple routers → multiple `register` calls. No `unregister`: routers live
+  for the page lifetime. Track via `WeakRef` if you need to.
+- The hook and its shape are **not** part of the public API. No semver
+  commitment on `register` beyond the contract above.
+
+Why not a `window` event (`supercat:router-commit`)? Events are stateless —
+an extension installed after the first commit misses history. `register`
+hands the extension the router instance, so it can pull `getHistory()` and
+`getSnapshot()` immediately, then subscribe for future commits.
+
+The router also sets `Symbol.toStringTag = 'Router'`, so DevTools shows
+`Router { adapter, navigate, ... }` instead of `{ ... }`.
 
 ### Validating route names from data
 

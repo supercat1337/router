@@ -1169,6 +1169,18 @@ function createRouter(options) {
   };
   Object.defineProperty(router, ROUTER_BRAND, { value: true });
   Object.defineProperty(router, Symbol.toStringTag, { value: "Router" });
+  if (isDev) {
+    const hook = (
+      /** @type {any} */
+      globalThis.__SUPERCAT_ROUTER_DEVTOOLS__
+    );
+    if (hook && typeof hook.register === "function") {
+      try {
+        hook.register(router);
+      } catch {
+      }
+    }
+  }
   return router;
 }
 

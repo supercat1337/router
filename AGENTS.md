@@ -32,8 +32,6 @@ Creates a frozen, branded leaf node. `name` is required and must be unique acros
 const home = file({ name: 'home', title: 'Home', layout: 'main' });
 ```
 
-````
-
 - **Do not** construct leaves by hand — `isFile` will fail.
 - **Do not** reuse a `name` — throws `MapValidationError` with code `name-duplicate`.
 - The `name` literal is preserved by `file<const M>` — this feeds `RouteNames<T>` in `createMap`.
@@ -203,6 +201,12 @@ Returned `Router<S, R>`:
 - **Do not** use `navigationId` as a component key — compare `url` / `params` instead.
 - **Do not** call `navigate` / `replace` / `revalidate` from inside a listener or a guard's synchronous frame — that's `reentrancy`, diagnosed (throw in dev, current snapshot in prod).
 - **Use `subscribe` for framework integration.** Do **not** stitch together `afterEnter` / `afterLeave` / `mapChanged` / `navigationError` — that pattern misses `revalidate()` with an unchanged URL and misses prod error snapshots. See [Common mistakes](#common-mistakes--do--dont).
+- **Devtools hook (not public API).** `createRouter` reads
+  `globalThis.__SUPERCAT_ROUTER_DEVTOOLS__` in dev mode and calls
+  `hook.register(router)` synchronously before returning. Do **not** use this in
+  application code — it exists for devtools extensions. For inspecting the
+  router from the console, use `router.getSnapshot()` / `router.subscribe(...)`
+  directly.
 
 #### `subscribe(listener) → () => void`
 
@@ -222,9 +226,7 @@ onMounted(() => {
 });
 ```
 
-`router.getSnapshot()` returns a stable reference when nothing changed — required by `useSyncExternalStore`.
-
----
+## `router.getSnapshot()` returns a stable reference when nothing changed — required by `useSyncExternalStore`.
 
 ### Type guards
 
@@ -483,6 +485,9 @@ State the non-goal and propose the intended workaround. **Do not invent an API.*
 | `<Link to="/x">` component       | No components         | `attachLinks(router)` + `<a data-router-link>`                     |
 | Blocking loaders                 | Sync core, no `await` | `afterEnter` + optimistic UI                                       |
 | Built-in code splitting          | Not in core           | User-side `import()` in `afterEnter`, or TanStack Router           |
+| Lazy route tree (deferred map)   | Violates sync core    | `file({ load })` + `afterEnter`; tree must stay synchronous        |
+| Blocking loaders (pre-navigate)  | Not in core           | Guard layer with `leaf.preload` + `signal` (see README recipes)    |
+| Devtools extension               | Not in package        | `globalThis.__SUPERCAT_ROUTER_DEVTOOLS__` (dev-only hook)          |
 | Built-in cache with invalidation | Not in core           | `@supercat1337/persist-core` + user-side loader                    |
 | Scroll restoration               | Not in core           | `afterEnter` + `window.scrollTo`                                   |
 | Cross-map redirect               | Not by design         | Different map via `resolveMap`, or guard layer                     |
@@ -521,6 +526,8 @@ When generating TypeScript, prefer `createRouter<AppState, typeof map>({...})` o
 - [ ] No `async` / `await` inside `resolveMap` or `notFound`.
 - [ ] `navigate` / `replace` arguments are RRUs (`/x`, no `#`), not Browser URLs.
 - [ ] Data loading is in `afterEnter` with `router.isCurrent(id)` check.
+- [ ] Code splitting is `file({ load })` + `afterEnter`, **not** a lazy map / Promise-returning `resolveMap`.
+- [ ] Blocking pre-navigation loaders use the guard layer (`leaf.preload` + `signal`), **not** the core.
 - [ ] Framework integration uses `router.subscribe` — **not** the four-event stitch.
 - [ ] Route names from external data validated once via `hasRoute`, not `try/catch` per render.
 - [ ] No `getHistory` / `dryMatch` / `getActiveMap` / `resolveMapFor` / `getRedirectPath`.
@@ -535,4 +542,3 @@ When generating TypeScript, prefer `createRouter<AppState, typeof map>({...})` o
 - `README.md` — tutorial, core concepts, recipes, comparison with other routers.
 - `dist/types.d.ts` — the authoritative public API surface.
 - `etc/router.api.md` — canonical API report (diff-friendly, GitHub only).
-````
