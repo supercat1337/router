@@ -129,11 +129,12 @@ function isValidRRU(url) {
 function match(rootChildren, url, mapNotFound) {
   const normalized = normalizeRRU(url);
   const pathname2 = extractPathname(normalized);
+  const search = parseSearch(extractSearch(normalized));
   const segments = splitSegments(pathname2);
   const result = walk(rootChildren, segments, [], {}, mapNotFound);
   return (
     /** @type {MatchResult} */
-    { ...result, url: normalized }
+    { ...result, url: normalized, search }
   );
 }
 function buildUrl(rootChildren, name, params) {
@@ -244,6 +245,18 @@ function tryDecode(seg) {
     return null;
   }
 }
+function extractSearch(url) {
+  const q = url.indexOf("?");
+  return q >= 0 ? url.slice(q + 1) : "";
+}
+function parseSearch(query) {
+  const result = {};
+  if (!query) return result;
+  new URLSearchParams(query).forEach((v, k) => {
+    result[k] = v;
+  });
+  return result;
+}
 function extractPathname(url) {
   const q = url.indexOf("?");
   return q >= 0 ? url.slice(0, q) : url;
@@ -283,6 +296,7 @@ function buildUrlImpl(children, name, params, pathSoFar) {
 
 // src/map.js
 var kKeysMap = Symbol("router.map.keysMap");
+var kHasRoute = Symbol("router.map.hasRoute");
 var MapValidationError = class extends Error {
   /** @type {MapValidationErrorCode} */
   code;
@@ -346,6 +360,9 @@ function createMap(data, options) {
   };
   Object.defineProperty(map, MAP_BRAND, { value: true });
   Object.defineProperty(map, kKeysMap, { value: keyMap });
+  Object.defineProperty(map, kHasRoute, {
+    value: (n) => hasRouteImpl(rootChildren, n)
+  });
   return Object.freeze(map);
 }
 function isMap(x) {
@@ -374,6 +391,27 @@ function collectTree(children, pathPrefix, seenNames, keyMap) {
 function defaultMessageFor(code, path) {
   const where = path ? ` at ${path}` : "";
   return `Invalid map${where}: ${code}`;
+}
+function hasRoute(map, name) {
+  if (!map || typeof map !== "object") return false;
+  if (typeof name !== "string" || name.length === 0) return false;
+  const fn = (
+    /** @type {any} */
+    map[kHasRoute]
+  );
+  return typeof fn === "function" ? fn(name) : false;
+}
+function hasRouteImpl(children, name) {
+  for (const key of Object.keys(children)) {
+    if (key === "*") continue;
+    const child = children[key];
+    if (isFile(child)) {
+      if (child.name === name) return true;
+    } else if (isFolder(child)) {
+      if (hasRouteImpl(child.children, name)) return true;
+    }
+  }
+  return false;
 }
 
 // src/redirect.js
@@ -1033,36 +1071,53 @@ function commonChainPrefix(prev, next, getKeysMap2) {
   return n;
 }
 function buildSnapshot(navigationId, map, status, chain, params, partialParams, url, notFoundResult) {
+  const frozenChain = Object.freeze([...chain]);
+  const frozenParams = Object.freeze({ ...params });
+  const frozenPartialParams = Object.freeze({ ...partialParams });
   const snap = {
     navigationId,
     map,
     status,
-    chain,
-    params,
-    partialParams,
-    url
+    chain: frozenChain,
+    params: frozenParams,
+    partialParams: frozenPartialParams,
+    url,
+    leaf: frozenChain.length > 0 ? frozenChain[frozenChain.length - 1] : void 0
   };
   if (status === "notFound") snap.notFoundResult = notFoundResult;
-  return snap;
+  return (
+    /** @type {Snapshot} */
+    Object.freeze(snap)
+  );
 }
 function buildErrorSnapshot(navigationId, prev, type, extra, url) {
-  return {
-    navigationId,
-    map: prev.map,
-    status: "error",
-    chain: prev.chain,
-    params: {},
-    partialParams: chainParams(prev),
-    url,
-    error: {
-      type,
-      error: extra.error,
-      attemptedUrl: extra.attemptedUrl,
-      path: extra.path,
-      partialChain: extra.partialChain,
-      partialParams: extra.partialParams
-    }
-  };
+  const frozenPartialChain = Object.freeze([...extra.partialChain]);
+  const frozenPartialParams = Object.freeze({ ...extra.partialParams });
+  const frozenPath = extra.path ? Object.freeze([...extra.path]) : void 0;
+  const error = Object.freeze({
+    type,
+    error: extra.error,
+    attemptedUrl: extra.attemptedUrl,
+    path: frozenPath,
+    partialChain: frozenPartialChain,
+    partialParams: frozenPartialParams
+  });
+  return (
+    /** @type {Snapshot} */
+    Object.freeze({
+      navigationId,
+      map: prev.map,
+      status: "error",
+      chain: prev.chain,
+      // already frozen
+      params: Object.freeze({}),
+      partialParams: chainParams(prev),
+      // already frozen (prev.params / prev.partialParams)
+      url,
+      leaf: prev.leaf,
+      error
+    })
+  );
 }
 
 // src/transaction.js
@@ -1287,6 +1342,7 @@ function runTransaction(source, inputUrl, env) {
     env.emit("beforeEnter", { suffix: enterSuffix, snapshot });
     env.emit("afterEnter", { suffix: enterSuffix, snapshot });
   }
+  env.emit("commit", { snapshot });
   return snapshot;
 }
 function getKeysMap(map) {
@@ -1320,6 +1376,7 @@ function handleError(type, extra, prevSnapshot, isInitial, env) {
     path: extra.path,
     snapshot
   });
+  env.emit("commit", { snapshot });
   return snapshot;
 }
 
@@ -1469,6 +1526,9 @@ function createRouter(options) {
   function getRedirectPath() {
     return lastRedirectPath;
   }
+  function subscribe(listener) {
+    return eventBus.on("commit", ({ snapshot }) => listener(snapshot));
+  }
   return {
     adapter,
     navigate,
@@ -1489,6 +1549,7 @@ function createRouter(options) {
     },
     getState,
     isCurrent,
+    subscribe,
     on: eventBus.on,
     off: eventBus.off,
     once: eventBus.once,
@@ -1505,6 +1566,7 @@ export {
   createRouter,
   file,
   folder,
+  hasRoute,
   isFile,
   isFolder,
   isMap,

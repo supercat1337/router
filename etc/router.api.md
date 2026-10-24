@@ -14,6 +14,19 @@ export interface AttachLinksOptions {
 export type Children = Record<string, FileNode | FolderNode>;
 
 // @public
+export interface CreateGuardedRouterOptions<S = any, R extends RouterMap = RouterMap> {
+    adapter: UrlAdapter;
+    dev?: boolean;
+    getState: () => S;
+    guardMaxRedirects?: number;
+    guards: Guard[];
+    maxRedirects?: number;
+    onGuardError?: OnGuardError;
+    onListenerError?: OnListenerError;
+    resolveMap: (ctx: ResolveMapContext<S>) => R;
+}
+
+// @public
 export interface CreateGuardLayerOptions {
     dev?: boolean;
     guards: Guard[];
@@ -21,31 +34,30 @@ export interface CreateGuardLayerOptions {
     onError?: OnGuardError;
 }
 
-// Warning: (ae-forgotten-export) The symbol "Node_3" needs to be exported by the entry point index.d.ts
-// Warning: (ae-forgotten-export) The symbol "RouterMap_2" needs to be exported by the entry point index.d.ts
-//
 // @public
-export function createMap(data: Record<string, Node_3>, options: {
-    notFound: NotFoundHandler_2;
-}): RouterMap_2;
-
-// Warning: (ae-forgotten-export) The symbol "Router_2" needs to be exported by the entry point index.d.ts
-//
-// @public
-export function createRouter(options: CreateRouterOptions): Router_2;
+export function createMap<const T extends Record<string, Node_2>>(
+data: T,
+options: { notFound: NotFoundHandler }
+): RouterMap<RouteNames<T>>;
 
 // @public
-export interface CreateRouterOptions {
+export function createRouter<
+S = any,
+R extends RouterMap = RouterMap,
+>(options: CreateRouterOptions<S, R>): Router<S, R>;
+
+// @public
+export interface CreateRouterOptions<S = any, R extends RouterMap = RouterMap> {
     adapter: UrlAdapter;
     dev?: boolean;
-    getState: () => any;
+    getState: () => S;
     maxRedirects?: number;
     onListenerError?: OnListenerError;
-    resolveMap: (ctx: ResolveMapContext) => RouterMap;
+    resolveMap: (ctx: ResolveMapContext<S>) => R;
 }
 
 // @public
-export type Decision = 'allow' | {
+export type Decision = 'allow' | RedirectResult | {
     redirect: string;
 } | {
     block: true;
@@ -69,6 +81,9 @@ export interface EventPayloads {
         suffix: Node_2[];
         snapshot: Snapshot;
     };
+    commit: {
+        snapshot: Snapshot;
+    };
     mapChanged: {
         oldMap: RouterMap;
         newMap: RouterMap;
@@ -88,10 +103,8 @@ export interface EventPayloads {
     };
 }
 
-// Warning: (ae-forgotten-export) The symbol "FileMeta_2" needs to be exported by the entry point index.d.ts
-//
 // @public
-export function file<M extends FileMeta_2>(meta: M): FileNode<M>;
+export function file<const M extends FileMeta>(meta: M): FileNode<M>;
 
 // @public
 export interface FileMeta {
@@ -110,11 +123,11 @@ export interface FileNode<M = FileMeta> {
     readonly title?: string;
 }
 
-// Warning: (ae-forgotten-export) The symbol "FolderOptions_2" needs to be exported by the entry point index.d.ts
-// Warning: (ae-forgotten-export) The symbol "Children_2" needs to be exported by the entry point index.d.ts
-//
 // @public
-export function folder<O extends FolderOptions_2, C extends Children_2>(options: O, children: C): FolderNode<O, C>;
+export function folder<
+const O extends FolderOptions,
+const C extends Children,
+>(options: O, children: C): FolderNode<O, C>;
 
 // @public
 export interface FolderNode<O = FolderOptions, C = Children> {
@@ -141,6 +154,30 @@ export type GuardContext = {
 };
 
 // @public
+export interface GuardedRouter<S = any, R extends RouterMap = RouterMap> {
+    guard: GuardLayer;
+    nav: {
+        navigate(url: string): Promise<NavResult>;
+        replace(url: string): Promise<NavResult>;
+    };
+    router: Router<S, R>;
+}
+
+// @public
+export type GuardErrorPayload = {
+    type: 'guard-throw';
+    error: unknown;
+} | {
+    type: 'guard-redirect-loop';
+    path: string[];
+} | {
+    type: 'invalid-rru';
+    target: string;
+} | {
+    type: 'reentrancy';
+};
+
+// @public
 export type GuardErrorType = 'reentrancy' | 'guard-redirect-loop' | 'invalid-rru' | 'guard-throw';
 
 // @public
@@ -153,33 +190,32 @@ export interface GuardLayer {
     pending(): {
         url: string;
         since: number;
+        signal: AbortSignal;
     } | null;
     wrapAdapter(adapter: UrlAdapter): UrlAdapter;
 }
 
-// Warning: (ae-forgotten-export) The symbol "FileNode_2" needs to be exported by the entry point index.d.ts
-//
 // @public
-export function isFile(x: unknown): x is FileNode_2;
-
-// Warning: (ae-forgotten-export) The symbol "FolderNode_2" needs to be exported by the entry point index.d.ts
-//
-// @public
-export function isFolder(x: unknown): x is FolderNode_2;
+export function hasRoute(map: RouterMap, name: string): boolean;
 
 // @public
-export function isMap(x: unknown): x is RouterMap_2;
+export function isFile(x: unknown): x is FileNode;
 
-// Warning: (ae-forgotten-export) The symbol "RedirectResult_2" needs to be exported by the entry point index.d.ts
-//
 // @public
-export function isRedirect(x: unknown): x is RedirectResult_2;
+export function isFolder(x: unknown): x is FolderNode;
+
+// @public
+export function isMap(x: unknown): x is RouterMap;
+
+// @public
+export function isRedirect(x: unknown): x is RedirectResult;
 
 // @public
 export class MapValidationError extends Error {
-    // Warning: (ae-forgotten-export) The symbol "MapValidationErrorCode_2" needs to be exported by the entry point index.d.ts
-    constructor(code: MapValidationErrorCode_2, path: string, message?: string);
-    code: MapValidationErrorCode_2;
+    constructor(code: MapValidationErrorCode, path: string, message?: string);
+
+    code: MapValidationErrorCode;
+
     path: string;
 }
 
@@ -191,11 +227,13 @@ export type MatchResult = {
     status: 'matched';
     chain: Node_2[];
     params: Record<string, string>;
+    search: Record<string, string>;
     url: string;
 } | {
     status: 'notFound';
     chain: Node_2[];
     partialParams: Record<string, string>;
+    search: Record<string, string>;
     handler: NotFoundHandler;
     url: string;
 };
@@ -220,7 +258,7 @@ export function normalizeRRU(url: string): string;
 
 // @public
 export interface NotFoundContext {
-    chain: Node_2[];
+    chain: readonly Node_2[];
     url: string;
 }
 
@@ -231,10 +269,7 @@ export type NotFoundHandler = (ctx: NotFoundContext) => NotFoundResult;
 export type NotFoundResult = unknown;
 
 // @public
-export type OnGuardError = (err: {
-    type: GuardErrorType;
-    [k: string]: any;
-}, ctx: {
+export type OnGuardError = (err: GuardErrorPayload, ctx: {
     url: string;
     from: Snapshot;
 }) => void;
@@ -246,7 +281,7 @@ export type OnListenerError = (err: unknown, info: {
 }) => void;
 
 // @public
-export function redirect(url: string): RedirectResult_2;
+export function redirect(url: string): RedirectResult;
 
 // @public
 export interface RedirectResult {
@@ -255,18 +290,28 @@ export interface RedirectResult {
 }
 
 // @public
-export interface ResolveMapContext {
-    state: any;
+export interface ResolveMapContext<S = any> {
+    state: S;
     url: string;
 }
 
 // @public
-export interface Router {
+export type RouteNameOf<R> = R extends RouterMap<infer N> ? N : string;
+
+// @public
+export type RouteNames<Data> = {
+    [K in keyof Data]: Data[K] extends FileNode<infer M> ? M extends {
+        name: infer N;
+    } ? N extends string ? N : never : never : Data[K] extends FolderNode<any, infer C> ? RouteNames<C> : never;
+}[keyof Data];
+
+// @public
+export interface Router<S = any, R extends RouterMap = RouterMap> {
     readonly adapter: UrlAdapter;
     back(): void;
     forward(): void;
     getSnapshot(): Snapshot;
-    getState(): any;
+    getState(): S;
     isCurrent(navigationId: number): boolean;
     navigate(url: string): Snapshot;
     off<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void): void;
@@ -274,34 +319,36 @@ export interface Router {
     once<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void): () => void;
     replace(url: string): Snapshot;
     revalidate(): Snapshot;
-    url(name: string, params?: Record<string, string>): string;
+    subscribe(listener: (snapshot: Snapshot) => void): () => void;
+    url(name: RouteNameOf<R>, params?: Record<string, string>): string;
 }
 
 // @public
-export interface RouterMap {
+export interface RouterMap<RouteName extends string = string> {
     match(url: string): MatchResult;
     readonly notFound: NotFoundHandler;
-    url(name: string, params?: Record<string, string>): string;
+    url(name: RouteName, params?: Record<string, string>): string;
 }
 
 // @public
 export interface Snapshot {
-    chain: Node_2[];
-    error?: {
-        type: NavigationErrorType;
-        error: unknown;
-        attemptedUrl: string;
-        path?: string[];
-        partialChain: Node_2[];
-        partialParams: Record<string, string>;
+    readonly chain: readonly Node_2[];
+    readonly error?: {
+        readonly type: NavigationErrorType;
+        readonly error: unknown;
+        readonly attemptedUrl: string;
+        readonly path?: readonly string[];
+        readonly partialChain: readonly Node_2[];
+        readonly partialParams: Readonly<Record<string, string>>;
     };
-    map: RouterMap;
-    navigationId: number;
-    notFoundResult?: unknown;
-    params: Record<string, string>;
-    partialParams: Record<string, string>;
-    status: 'matched' | 'notFound' | 'error';
-    url: string;
+    readonly leaf: Node_2 | undefined;
+    readonly map: RouterMap;
+    readonly navigationId: number;
+    readonly notFoundResult?: unknown;
+    readonly params: Readonly<Record<string, string>>;
+    readonly partialParams: Readonly<Record<string, string>>;
+    readonly status: 'matched' | 'notFound' | 'error';
+    readonly url: string;
 }
 
 // @public
@@ -312,9 +359,5 @@ export interface UrlAdapter {
     read(): string;
     write(url: string, mode: 'push' | 'replace'): void;
 }
-
-// Warnings were encountered during analysis:
-//
-// dist/types-temp/src/map.d.ts:18:5 - (ae-forgotten-export) The symbol "NotFoundHandler_2" needs to be exported by the entry point index.d.ts
 
 ```

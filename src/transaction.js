@@ -30,7 +30,7 @@ import { buildSnapshot, buildErrorSnapshot, commonChainPrefix } from './snapshot
  * @property {() => number} nextNavigationId
  * @property {(event: keyof EventPayloads, payload: any) => void} emit
  * @property {(path: string[]) => void} setLastRedirectPath
- * 
+ *
  * @internal
  */
 
@@ -308,6 +308,8 @@ export function runTransaction(source, inputUrl, env) {
         env.emit('afterEnter', { suffix: enterSuffix, snapshot });
     }
 
+    env.emit('commit', { snapshot });
+
     return snapshot;
 }
 
@@ -337,7 +339,7 @@ function handleError(type, extra, prevSnapshot, isInitial, env) {
         if (extra.error !== undefined) throw extra.error;
         throw new TypeError(type);
     }
-    /* c8 ignore next 3 */
+    /* c8 ignore next 4 */
     if (!prevSnapshot) {
         // Unreachable: non-initial always has a previous snapshot.
         throw new TypeError(`error before first commit: ${type}`);
@@ -355,5 +357,6 @@ function handleError(type, extra, prevSnapshot, isInitial, env) {
         path: extra.path,
         snapshot,
     });
+    env.emit('commit', { snapshot });
     return snapshot;
 }

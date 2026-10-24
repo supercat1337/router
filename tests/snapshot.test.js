@@ -15,6 +15,14 @@ import {
 const nf = () => null;
 
 /**
+ * @param {readonly import("../src/types.js").Node[]} chain
+ * @returns {import("../src/types.js").Node | undefined}
+ */
+function leafOf(chain) {
+    return chain.length > 0 ? chain[chain.length - 1] : undefined;
+}
+
+/**
  * @param {any} map
  * @returns {WeakMap<any, string>}
  */
@@ -32,6 +40,7 @@ test('chainParams: matched uses params', t => {
         params: { id: '5' },
         partialParams: {},
         url: '/',
+        leaf: undefined,
     };
     t.deepEqual(chainParams(snap), { id: '5' });
 });
@@ -46,6 +55,7 @@ test('chainParams: notFound uses partialParams', t => {
         params: {},
         partialParams: { id: '5' },
         url: '/',
+        leaf: undefined,
     };
     t.deepEqual(chainParams(snap), { id: '5' });
 });
@@ -65,6 +75,7 @@ test('urlPrefixes: literal chain', t => {
         params: r.params,
         partialParams: {},
         url: '/users/profile',
+        leaf: leafOf(r.chain),
     };
     t.deepEqual(urlPrefixes(r.chain, snap, kmOf(map)), ['/users', '/users/profile']);
 });
@@ -81,6 +92,7 @@ test('urlPrefixes: :name decoded', t => {
         params: r.params,
         partialParams: {},
         url: '/users/%35',
+        leaf: leafOf(r.chain),
     };
     t.deepEqual(urlPrefixes(r.chain, snap, kmOf(map)), ['/users', '/users/5']);
 });
@@ -97,6 +109,7 @@ test('urlPrefixes: * uses full encoded pathname (no query)', t => {
         params: r.params,
         partialParams: {},
         url: '/foo%20bar',
+        leaf: leafOf(r.chain),
     };
     t.deepEqual(urlPrefixes(r.chain, snap, kmOf(map)), ['/foo%20bar']);
 });
@@ -113,6 +126,7 @@ test('urlPrefixes: * strips query', t => {
         params: r.params,
         partialParams: {},
         url: '/foo?tab=1',
+        leaf: leafOf(r.chain),
     };
     t.deepEqual(urlPrefixes(r.chain, snap, kmOf(map)), ['/foo']);
 });
@@ -132,6 +146,7 @@ test('urlPrefixes: index = parent prefix', t => {
         params: r.params,
         partialParams: {},
         url: '/admin',
+        leaf: leafOf(r.chain),
     };
     t.deepEqual(urlPrefixes(r.chain, snap, kmOf(map)), ['/admin', '/admin']);
 });
@@ -147,6 +162,7 @@ test('urlPrefixes: node not in keysMap → parent prefix', t => {
         params: {},
         partialParams: {},
         url: '/x',
+        leaf: fakeNode,
     };
     t.deepEqual(urlPrefixes([fakeNode], snap, new WeakMap()), ['']);
 });
@@ -164,6 +180,7 @@ test('commonChainPrefix: shared root', t => {
         params: r1.params,
         partialParams: {},
         url: '/users/5',
+        leaf: leafOf(r1.chain),
     };
     const next = {
         navigationId: 2,
@@ -173,6 +190,7 @@ test('commonChainPrefix: shared root', t => {
         params: r2.params,
         partialParams: {},
         url: '/users/6',
+        leaf: leafOf(r2.chain),
     };
     t.is(commonChainPrefix(prev, next, kmOf), 1);
 });
@@ -201,6 +219,7 @@ test('buildErrorSnapshot: anchored to prev', t => {
         params: r.params,
         partialParams: {},
         url: '/login',
+        leaf: leafOf(r.chain),
     };
     const err = buildErrorSnapshot(
         2,

@@ -10,10 +10,6 @@ import { normalizeRRU } from './normalize.js';
  */
 
 /**
- * The source of `params[name]` for `urlPrefix(:name)` regardless of
- * `status`: `params` for matched, `partialParams` otherwise. Central
- * helper for chain comparison.
- *
  * @internal
  * @param {Snapshot} snapshot
  * @returns {Record<string, string>}
@@ -32,17 +28,8 @@ function pathname(url) {
 }
 
 /**
- * Compute `urlPrefix` for each node in the chain. `urlPrefix` is not a
- * node field — it is derived per-snapshot from `(chain, params|partialParams,
- * snapshot.url)` and the node's key in its parent's `children`.
- *
- * The literal `urlPrefix` is decoded (= encoded, URL-safe by validation).
- * `:name` is decoded from params. `index` equals parent's prefix. `*`
- * equals the full encoded pathname of `snapshot.url` (per
- * `06-snapshot-events.md#url-prefix`).
- *
  * @internal
- * @param {Node[]} chain
+ * @param {readonly Node[]} chain
  * @param {Snapshot} snapshot
  * @param {WeakMap<Node, string>} keysMap
  * @returns {string[]}
@@ -75,11 +62,6 @@ export function urlPrefixes(chain, snapshot, keysMap) {
 }
 
 /**
- * Length of the common chain prefix between two snapshots, compared by
- * `urlPrefix` (string equality, case-sensitive). The first pair with
- * different prefixes is the divergence point. If one chain is empty or no
- * common pair exists — `0`.
- *
  * @internal
  * @param {Snapshot} prev
  * @param {Snapshot} next
@@ -97,14 +79,11 @@ export function commonChainPrefix(prev, next, getKeysMap) {
 }
 
 /**
- * Build a matched/notFound snapshot. `notFoundResult` is attached only for
- * `notFound`.
- *
  * @internal
  * @param {number} navigationId
  * @param {RouterMap} map
  * @param {'matched' | 'notFound'} status
- * @param {Node[]} chain
+ * @param {readonly Node[]} chain
  * @param {Record<string, string>} params
  * @param {Record<string, string>} partialParams
  * @param {string} url
@@ -121,25 +100,25 @@ export function buildSnapshot(
     url,
     notFoundResult
 ) {
-    /** @type {Snapshot} */
+    const frozenChain = Object.freeze([...chain]);
+    const frozenParams = Object.freeze({ ...params });
+    const frozenPartialParams = Object.freeze({ ...partialParams });
+    /** @type {any} */
     const snap = {
         navigationId,
         map,
         status,
-        chain,
-        params,
-        partialParams,
+        chain: frozenChain,
+        params: frozenParams,
+        partialParams: frozenPartialParams,
         url,
+        leaf: frozenChain.length > 0 ? frozenChain[frozenChain.length - 1] : undefined,
     };
     if (status === 'notFound') snap.notFoundResult = notFoundResult;
-    return snap;
+    return /** @type {Snapshot} */ (Object.freeze(snap));
 }
 
 /**
- * Build an error snapshot anchored to the previous committed snapshot.
- * `map` and `chain` are from `prev`; `params` is `{}`; `partialParams`
- * is `chainParams(prev)` so `urlPrefix(:name)` stays computable.
- *
  * @internal
  * @param {number} navigationId
  * @param {Snapshot} prev
@@ -149,21 +128,28 @@ export function buildSnapshot(
  * @returns {Snapshot}
  */
 export function buildErrorSnapshot(navigationId, prev, type, extra, url) {
-    return {
-        navigationId,
-        map: prev.map,
-        status: 'error',
-        chain: prev.chain,
-        params: {},
-        partialParams: chainParams(prev),
-        url,
-        error: {
-            type,
-            error: extra.error,
-            attemptedUrl: extra.attemptedUrl,
-            path: extra.path,
-            partialChain: extra.partialChain,
-            partialParams: extra.partialParams,
-        },
-    };
+    const frozenPartialChain = Object.freeze([...extra.partialChain]);
+    const frozenPartialParams = Object.freeze({ ...extra.partialParams });
+    const frozenPath = extra.path ? Object.freeze([...extra.path]) : undefined;
+    const error = Object.freeze({
+        type,
+        error: extra.error,
+        attemptedUrl: extra.attemptedUrl,
+        path: frozenPath,
+        partialChain: frozenPartialChain,
+        partialParams: frozenPartialParams,
+    });
+    return /** @type {Snapshot} */ (
+        Object.freeze({
+            navigationId,
+            map: prev.map,
+            status: 'error',
+            chain: prev.chain, // already frozen
+            params: Object.freeze({}),
+            partialParams: chainParams(prev), // already frozen (prev.params / prev.partialParams)
+            url,
+            leaf: prev.leaf,
+            error,
+        })
+    );
 }

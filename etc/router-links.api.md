@@ -4,13 +4,29 @@
 
 ```ts
 
-// Warning: (ae-forgotten-export) The symbol "Router" needs to be exported by the entry point links.d.ts
-// Warning: (ae-forgotten-export) The symbol "AttachLinksOptions" needs to be exported by the entry point links.d.ts
-//
 // @public
 export function attachLinks(
-router: Router,
+router: {
+    readonly adapter: UrlAdapter;
+    navigate(url: string): unknown;
+    replace(url: string): unknown;
+},
 options?: AttachLinksOptions
 ): () => void;
+
+// @public
+export interface AttachLinksOptions {
+    navigate?: (rru: string) => unknown;
+    replace?: (rru: string) => unknown;
+}
+
+// @public
+export interface UrlAdapter {
+    readonly base?: string;
+    listen(cb: (event: PopStateEvent | HashChangeEvent) => void): () => void;
+    normalize(href: string): string | null;
+    read(): string;
+    write(url: string, mode: 'push' | 'replace'): void;
+}
 
 ```

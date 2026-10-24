@@ -4,12 +4,316 @@
 
 ```ts
 
-// Warning: (ae-forgotten-export) The symbol "CreateGuardLayerOptions" needs to be exported by the entry point guard.d.ts
-// Warning: (ae-forgotten-export) The symbol "GuardLayer" needs to be exported by the entry point guard.d.ts
-//
+// @public
+export type Children = Record<string, FileNode | FolderNode>;
+
+// @public
+export function createGuardedRouter<
+S = any,
+R extends RouterMap = RouterMap,
+>(
+options: CreateGuardedRouterOptions<S, R>
+): GuardedRouter<S, R>;
+
+// @public
+export interface CreateGuardedRouterOptions<S = any, R extends RouterMap = RouterMap> {
+    adapter: UrlAdapter;
+    dev?: boolean;
+    getState: () => S;
+    guardMaxRedirects?: number;
+    guards: Guard[];
+    maxRedirects?: number;
+    onGuardError?: OnGuardError;
+    onListenerError?: OnListenerError;
+    resolveMap: (ctx: ResolveMapContext<S>) => R;
+}
+
 // @public
 export function createGuardLayer(
 options: CreateGuardLayerOptions
 ): GuardLayer;
+
+// @public
+export interface CreateGuardLayerOptions {
+    dev?: boolean;
+    guards: Guard[];
+    maxRedirects?: number;
+    onError?: OnGuardError;
+}
+
+// @public
+export interface CreateRouterOptions<S = any, R extends RouterMap = RouterMap> {
+    adapter: UrlAdapter;
+    dev?: boolean;
+    getState: () => S;
+    maxRedirects?: number;
+    onListenerError?: OnListenerError;
+    resolveMap: (ctx: ResolveMapContext<S>) => R;
+}
+
+// @public
+export type Decision = 'allow' | RedirectResult | {
+    redirect: string;
+} | {
+    block: true;
+};
+
+// @public
+export interface EventPayloads {
+    afterEnter: {
+        suffix: Node_2[];
+        snapshot: Snapshot;
+    };
+    afterLeave: {
+        suffix: Node_2[];
+        snapshot: Snapshot;
+    };
+    beforeEnter: {
+        suffix: Node_2[];
+        snapshot: Snapshot;
+    };
+    beforeLeave: {
+        suffix: Node_2[];
+        snapshot: Snapshot;
+    };
+    commit: {
+        snapshot: Snapshot;
+    };
+    mapChanged: {
+        oldMap: RouterMap;
+        newMap: RouterMap;
+        snapshot: Snapshot;
+    };
+    mapWillChange: {
+        oldMap: RouterMap;
+        newMap: RouterMap;
+        snapshot: Snapshot;
+    };
+    navigationError: {
+        type: NavigationErrorType;
+        error: unknown;
+        attemptedUrl: string;
+        path?: string[];
+        snapshot: Snapshot;
+    };
+}
+
+// @public
+export interface FileMeta {
+    [key: string]: any;
+    layout?: string;
+    name: string;
+    title?: string;
+}
+
+// @public
+export interface FileNode<M = FileMeta> {
+    readonly [FILE_BRAND]: true;
+    readonly [key: string]: any;
+    readonly layout?: string;
+    readonly name: string;
+    readonly title?: string;
+}
+
+// @public
+export interface FolderNode<O = FolderOptions, C = Children> {
+    readonly [FOLDER_BRAND]: true;
+    readonly children: Readonly<C>;
+    readonly notFound?: NotFoundHandler;
+}
+
+// @public
+export interface FolderOptions {
+    [key: string]: any;
+    notFound?: NotFoundHandler;
+}
+
+// @public
+export type Guard = (ctx: GuardContext) => Decision | Promise<Decision>;
+
+// @public
+export type GuardContext = {
+    url: string;
+    from: Snapshot;
+    signal: AbortSignal;
+    router: Pick<Router, 'getSnapshot' | 'getState' | 'isCurrent' | 'url'>;
+};
+
+// @public
+export interface GuardedRouter<S = any, R extends RouterMap = RouterMap> {
+    guard: GuardLayer;
+    nav: {
+        navigate(url: string): Promise<NavResult>;
+        replace(url: string): Promise<NavResult>;
+    };
+    router: Router<S, R>;
+}
+
+// @public
+export type GuardErrorPayload = {
+    type: 'guard-throw';
+    error: unknown;
+} | {
+    type: 'guard-redirect-loop';
+    path: string[];
+} | {
+    type: 'invalid-rru';
+    target: string;
+} | {
+    type: 'reentrancy';
+};
+
+// @public
+export type GuardErrorType = 'reentrancy' | 'guard-redirect-loop' | 'invalid-rru' | 'guard-throw';
+
+// @public
+export interface GuardLayer {
+    bind(router: Router): void;
+    navigate(): {
+        navigate(url: string): Promise<NavResult>;
+        replace(url: string): Promise<NavResult>;
+    };
+    pending(): {
+        url: string;
+        since: number;
+        signal: AbortSignal;
+    } | null;
+    wrapAdapter(adapter: UrlAdapter): UrlAdapter;
+}
+
+// @public
+export type MapValidationErrorCode = 'data-not-object' | 'data-key-invalid' | 'index-at-root' | 'notFound-missing' | 'notFound-invalid' | 'name-duplicate' | 'node-not-constructed';
+
+// @public
+export type MatchResult = {
+    status: 'matched';
+    chain: Node_2[];
+    params: Record<string, string>;
+    search: Record<string, string>;
+    url: string;
+} | {
+    status: 'notFound';
+    chain: Node_2[];
+    partialParams: Record<string, string>;
+    search: Record<string, string>;
+    handler: NotFoundHandler;
+    url: string;
+};
+
+// @public
+export type NavigationErrorType = 'invalid-rru' | 'resolver-null' | 'resolver-promise' | 'resolver-throw' | 'resolver-invalid' | 'notFound-promise' | 'notFound-throw' | 'redirect-loop';
+
+// @public
+export type NavResult = {
+    status: 'committed';
+    snapshot: Snapshot;
+} | {
+    status: 'blocked';
+};
+
+// @public
+type Node_2 = FileNode | FolderNode;
+export { Node_2 as Node }
+
+// @public
+export interface NotFoundContext {
+    chain: readonly Node_2[];
+    url: string;
+}
+
+// @public
+export type NotFoundHandler = (ctx: NotFoundContext) => NotFoundResult;
+
+// @public
+export type NotFoundResult = unknown;
+
+// @public
+export type OnGuardError = (err: GuardErrorPayload, ctx: {
+    url: string;
+    from: Snapshot;
+}) => void;
+
+// @public
+export type OnListenerError = (err: unknown, info: {
+    event: keyof EventPayloads;
+    snapshot: Snapshot;
+}) => void;
+
+// @public
+export interface RedirectResult {
+    readonly [REDIRECT_BRAND]: true;
+    readonly url: string;
+}
+
+// @public
+export interface ResolveMapContext<S = any> {
+    state: S;
+    url: string;
+}
+
+// @public
+export type RouteNameOf<R> = R extends RouterMap<infer N> ? N : string;
+
+// @public
+export type RouteNames<Data> = {
+    [K in keyof Data]: Data[K] extends FileNode<infer M> ? M extends {
+        name: infer N;
+    } ? N extends string ? N : never : never : Data[K] extends FolderNode<any, infer C> ? RouteNames<C> : never;
+}[keyof Data];
+
+// @public
+export interface Router<S = any, R extends RouterMap = RouterMap> {
+    readonly adapter: UrlAdapter;
+    back(): void;
+    forward(): void;
+    getSnapshot(): Snapshot;
+    getState(): S;
+    isCurrent(navigationId: number): boolean;
+    navigate(url: string): Snapshot;
+    off<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void): void;
+    on<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void): () => void;
+    once<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void): () => void;
+    replace(url: string): Snapshot;
+    revalidate(): Snapshot;
+    subscribe(listener: (snapshot: Snapshot) => void): () => void;
+    url(name: RouteNameOf<R>, params?: Record<string, string>): string;
+}
+
+// @public
+export interface RouterMap<RouteName extends string = string> {
+    match(url: string): MatchResult;
+    readonly notFound: NotFoundHandler;
+    url(name: RouteName, params?: Record<string, string>): string;
+}
+
+// @public
+export interface Snapshot {
+    readonly chain: readonly Node_2[];
+    readonly error?: {
+        readonly type: NavigationErrorType;
+        readonly error: unknown;
+        readonly attemptedUrl: string;
+        readonly path?: readonly string[];
+        readonly partialChain: readonly Node_2[];
+        readonly partialParams: Readonly<Record<string, string>>;
+    };
+    readonly leaf: Node_2 | undefined;
+    readonly map: RouterMap;
+    readonly navigationId: number;
+    readonly notFoundResult?: unknown;
+    readonly params: Readonly<Record<string, string>>;
+    readonly partialParams: Readonly<Record<string, string>>;
+    readonly status: 'matched' | 'notFound' | 'error';
+    readonly url: string;
+}
+
+// @public
+export interface UrlAdapter {
+    readonly base?: string;
+    listen(cb: (event: PopStateEvent | HashChangeEvent) => void): () => void;
+    normalize(href: string): string | null;
+    read(): string;
+    write(url: string, mode: 'push' | 'replace'): void;
+}
 
 ```

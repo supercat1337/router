@@ -276,9 +276,10 @@ function isValidRRU(url) {
 function match(rootChildren, url, mapNotFound) {
     const normalized = normalizeRRU(url);
     const pathname = extractPathname(normalized);
+    const search = parseSearch(extractSearch(normalized));
     const segments = splitSegments(pathname);
     const result = walk(rootChildren, segments, [], {}, mapNotFound);
-    return /** @type {MatchResult} */ ({ ...result, url: normalized });
+    return /** @type {MatchResult} */ ({ ...result, url: normalized, search });
 }
 
 /**
@@ -433,6 +434,32 @@ function tryDecode(seg) {
  * @param {string} url
  * @returns {string}
  */
+function extractSearch(url) {
+    const q = url.indexOf('?');
+    return q >= 0 ? url.slice(q + 1) : '';
+}
+
+/**
+ * Parse a query string (without leading `?`) into a plain object.
+ * Duplicate keys → last value wins. Encoded values are decoded.
+ *
+ * @param {string} query
+ * @returns {Record<string, string>}
+ */
+function parseSearch(query) {
+    /** @type {Record<string, string>} */
+    const result = {};
+    if (!query) return result;
+    new URLSearchParams(query).forEach((v, k) => {
+        result[k] = v;
+    });
+    return result;
+}
+
+/**
+ * @param {string} url
+ * @returns {string}
+ */
 function extractPathname(url) {
     const q = url.indexOf('?');
     return q >= 0 ? url.slice(0, q) : url;
@@ -521,6 +548,14 @@ function buildUrlImpl(children, name, params, pathSoFar) {
 const kKeysMap = Symbol('router.map.keysMap');
 
 /**
+ * Internal symbol: closes over `rootChildren` for `hasRoute` without
+ * leaking tree access to consumers. Populated by `createMap`. Not exported
+ * from the public entry.
+ * @internal
+ */
+const kHasRoute = Symbol('router.map.hasRoute');
+
+/**
  * Thrown by `createMap` when a tree-wide invariant is violated.
  *
  * `code` identifies the invariant; `path` locates the offending node
@@ -607,6 +642,9 @@ function createMap(data, options) {
     };
     Object.defineProperty(map, MAP_BRAND, { value: true });
     Object.defineProperty(map, kKeysMap, { value: keyMap });
+    Object.defineProperty(map, kHasRoute, {
+        value: (/** @type {string} */ n) => hasRouteImpl(rootChildren, n),
+    });
     return Object.freeze(map);
 }
 
@@ -657,6 +695,53 @@ function collectTree(children, pathPrefix, seenNames, keyMap) {
 function defaultMessageFor(code, path) {
     const where = path ? ` at ${path}` : '';
     return `Invalid map${where}: ${code}`;
+}
+
+/**
+ * Check whether a route with a canonical URL exists for `name` in `map`.
+ *
+ * Returns `true` iff `map.url(name, ...)` would not throw for the reason
+ * "route not found" — i.e. there is a non-wildcard leaf with
+ * `name === name`. Parameter validity is **not** checked: `hasRoute` may
+ * return `true` while `url(name)` still throws for missing or invalid
+ * `:name` params.
+ *
+ * Wildcard-only routes (`*`) have no canonical URL and return `false`.
+ * Non-map / non-string / empty-string inputs return `false`.
+ *
+ * Intended for one-shot validation of route names from config / feature
+ * flags / external sources at data-load time. O(N) in tree size;
+ * no memoization — do not call per render.
+ *
+ * @public
+ * @param {RouterMap} map
+ * @param {string} name
+ * @returns {boolean}
+ */
+function hasRoute(map, name) {
+    if (!map || typeof map !== 'object') return false;
+    if (typeof name !== 'string' || name.length === 0) return false;
+    const fn = /** @type {any} */ (map)[kHasRoute];
+    return typeof fn === 'function' ? fn(name) : false;
+}
+
+/**
+ * @internal
+ * @param {Children} children
+ * @param {string} name
+ * @returns {boolean}
+ */
+function hasRouteImpl(children, name) {
+    for (const key of Object.keys(children)) {
+        if (key === '*') continue;
+        const child = children[key];
+        if (isFile(child)) {
+            if (child.name === name) return true;
+        } else if (isFolder(child)) {
+            if (hasRouteImpl(child.children, name)) return true;
+        }
+    }
+    return false;
 }
 
 // @ts-check
@@ -780,10 +865,6 @@ function createEventBus(onListenerError) {
  */
 
 /**
- * The source of `params[name]` for `urlPrefix(:name)` regardless of
- * `status`: `params` for matched, `partialParams` otherwise. Central
- * helper for chain comparison.
- *
  * @internal
  * @param {Snapshot} snapshot
  * @returns {Record<string, string>}
@@ -802,17 +883,8 @@ function pathname(url) {
 }
 
 /**
- * Compute `urlPrefix` for each node in the chain. `urlPrefix` is not a
- * node field — it is derived per-snapshot from `(chain, params|partialParams,
- * snapshot.url)` and the node's key in its parent's `children`.
- *
- * The literal `urlPrefix` is decoded (= encoded, URL-safe by validation).
- * `:name` is decoded from params. `index` equals parent's prefix. `*`
- * equals the full encoded pathname of `snapshot.url` (per
- * `06-snapshot-events.md#url-prefix`).
- *
  * @internal
- * @param {Node[]} chain
+ * @param {readonly Node[]} chain
  * @param {Snapshot} snapshot
  * @param {WeakMap<Node, string>} keysMap
  * @returns {string[]}
@@ -845,11 +917,6 @@ function urlPrefixes(chain, snapshot, keysMap) {
 }
 
 /**
- * Length of the common chain prefix between two snapshots, compared by
- * `urlPrefix` (string equality, case-sensitive). The first pair with
- * different prefixes is the divergence point. If one chain is empty or no
- * common pair exists — `0`.
- *
  * @internal
  * @param {Snapshot} prev
  * @param {Snapshot} next
@@ -867,14 +934,11 @@ function commonChainPrefix(prev, next, getKeysMap) {
 }
 
 /**
- * Build a matched/notFound snapshot. `notFoundResult` is attached only for
- * `notFound`.
- *
  * @internal
  * @param {number} navigationId
  * @param {RouterMap} map
  * @param {'matched' | 'notFound'} status
- * @param {Node[]} chain
+ * @param {readonly Node[]} chain
  * @param {Record<string, string>} params
  * @param {Record<string, string>} partialParams
  * @param {string} url
@@ -891,25 +955,25 @@ function buildSnapshot(
     url,
     notFoundResult
 ) {
-    /** @type {Snapshot} */
+    const frozenChain = Object.freeze([...chain]);
+    const frozenParams = Object.freeze({ ...params });
+    const frozenPartialParams = Object.freeze({ ...partialParams });
+    /** @type {any} */
     const snap = {
         navigationId,
         map,
         status,
-        chain,
-        params,
-        partialParams,
+        chain: frozenChain,
+        params: frozenParams,
+        partialParams: frozenPartialParams,
         url,
+        leaf: frozenChain.length > 0 ? frozenChain[frozenChain.length - 1] : undefined,
     };
     if (status === 'notFound') snap.notFoundResult = notFoundResult;
-    return snap;
+    return /** @type {Snapshot} */ (Object.freeze(snap));
 }
 
 /**
- * Build an error snapshot anchored to the previous committed snapshot.
- * `map` and `chain` are from `prev`; `params` is `{}`; `partialParams`
- * is `chainParams(prev)` so `urlPrefix(:name)` stays computable.
- *
  * @internal
  * @param {number} navigationId
  * @param {Snapshot} prev
@@ -919,23 +983,30 @@ function buildSnapshot(
  * @returns {Snapshot}
  */
 function buildErrorSnapshot(navigationId, prev, type, extra, url) {
-    return {
-        navigationId,
-        map: prev.map,
-        status: 'error',
-        chain: prev.chain,
-        params: {},
-        partialParams: chainParams(prev),
-        url,
-        error: {
-            type,
-            error: extra.error,
-            attemptedUrl: extra.attemptedUrl,
-            path: extra.path,
-            partialChain: extra.partialChain,
-            partialParams: extra.partialParams,
-        },
-    };
+    const frozenPartialChain = Object.freeze([...extra.partialChain]);
+    const frozenPartialParams = Object.freeze({ ...extra.partialParams });
+    const frozenPath = extra.path ? Object.freeze([...extra.path]) : undefined;
+    const error = Object.freeze({
+        type,
+        error: extra.error,
+        attemptedUrl: extra.attemptedUrl,
+        path: frozenPath,
+        partialChain: frozenPartialChain,
+        partialParams: frozenPartialParams,
+    });
+    return /** @type {Snapshot} */ (
+        Object.freeze({
+            navigationId,
+            map: prev.map,
+            status: 'error',
+            chain: prev.chain, // already frozen
+            params: Object.freeze({}),
+            partialParams: chainParams(prev), // already frozen (prev.params / prev.partialParams)
+            url,
+            leaf: prev.leaf,
+            error,
+        })
+    );
 }
 
 // @ts-check
@@ -966,7 +1037,7 @@ function buildErrorSnapshot(navigationId, prev, type, extra, url) {
  * @property {() => number} nextNavigationId
  * @property {(event: keyof EventPayloads, payload: any) => void} emit
  * @property {(path: string[]) => void} setLastRedirectPath
- * 
+ *
  * @internal
  */
 
@@ -1244,6 +1315,8 @@ function runTransaction(source, inputUrl, env) {
         env.emit('afterEnter', { suffix: enterSuffix, snapshot });
     }
 
+    env.emit('commit', { snapshot });
+
     return snapshot;
 }
 
@@ -1273,7 +1346,7 @@ function handleError(type, extra, prevSnapshot, isInitial, env) {
         if (extra.error !== undefined) throw extra.error;
         throw new TypeError(type);
     }
-    /* c8 ignore next 3 */
+    /* c8 ignore next 4 */
     if (!prevSnapshot) {
         // Unreachable: non-initial always has a previous snapshot.
         throw new TypeError(`error before first commit: ${type}`);
@@ -1291,6 +1364,7 @@ function handleError(type, extra, prevSnapshot, isInitial, env) {
         path: extra.path,
         snapshot,
     });
+    env.emit('commit', { snapshot });
     return snapshot;
 }
 
@@ -1298,7 +1372,6 @@ function handleError(type, extra, prevSnapshot, isInitial, env) {
 
 
 /**
- * @typedef {import('./types.js').Router} Router
  * @typedef {import('./types.js').Snapshot} Snapshot
  * @typedef {import('./types.js').RouterMap} RouterMap
  * @typedef {import('./types.js').UrlAdapter} UrlAdapter
@@ -1323,8 +1396,10 @@ function handleError(type, extra, prevSnapshot, isInitial, env) {
  *   4. `const nav = guard.navigate()`
  *
  * @public
- * @param {import('./types.js').CreateRouterOptions} options
- * @returns {Router}
+ * @template S
+ * @template {RouterMap} R
+ * @param {import('./types.js').CreateRouterOptions<S, R>} options
+ * @returns {import('./types.js').Router<S, R>}
  */
 function createRouter(options) {
     const HISTORY_LIMIT = 50;
@@ -1559,6 +1634,11 @@ function createRouter(options) {
         return lastRedirectPath;
     }
 
+    /** @param {(snapshot: Snapshot) => void} listener */
+    function subscribe(listener) {
+        return eventBus.on('commit', ({ snapshot }) => listener(snapshot));
+    }
+
     return {
         adapter,
         navigate,
@@ -1576,6 +1656,7 @@ function createRouter(options) {
         },
         getState,
         isCurrent,
+        subscribe,
         on: eventBus.on,
         off: eventBus.off,
         once: eventBus.once,
@@ -1587,4 +1668,4 @@ function createRouter(options) {
     };
 }
 
-export { MapValidationError, createMap, createRouter, file, folder, isFile, isFolder, isMap, isRedirect, normalizeRRU, redirect };
+export { MapValidationError, createMap, createRouter, file, folder, hasRoute, isFile, isFolder, isMap, isRedirect, normalizeRRU, redirect };

@@ -24,9 +24,10 @@ import { normalizeRRU } from './normalize.js';
 export function match(rootChildren, url, mapNotFound) {
     const normalized = normalizeRRU(url);
     const pathname = extractPathname(normalized);
+    const search = parseSearch(extractSearch(normalized));
     const segments = splitSegments(pathname);
     const result = walk(rootChildren, segments, [], {}, mapNotFound);
-    return /** @type {MatchResult} */ ({ ...result, url: normalized });
+    return /** @type {MatchResult} */ ({ ...result, url: normalized, search });
 }
 
 /**
@@ -175,6 +176,32 @@ function tryDecode(seg) {
     } catch {
         return null;
     }
+}
+
+/**
+ * @param {string} url
+ * @returns {string}
+ */
+function extractSearch(url) {
+    const q = url.indexOf('?');
+    return q >= 0 ? url.slice(q + 1) : '';
+}
+
+/**
+ * Parse a query string (without leading `?`) into a plain object.
+ * Duplicate keys → last value wins. Encoded values are decoded.
+ *
+ * @param {string} query
+ * @returns {Record<string, string>}
+ */
+function parseSearch(query) {
+    /** @type {Record<string, string>} */
+    const result = {};
+    if (!query) return result;
+    new URLSearchParams(query).forEach((v, k) => {
+        result[k] = v;
+    });
+    return result;
 }
 
 /**

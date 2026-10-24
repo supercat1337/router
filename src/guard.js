@@ -1,6 +1,8 @@
 // @ts-check
 
 import { isValidRRU, normalizeRRU } from './normalize.js';
+import { isRedirect } from './redirect.js';
+import { createRouter } from './router.js';
 
 /**
  * @typedef {import('./types.js').GuardLayer} GuardLayer
@@ -97,6 +99,21 @@ export function createGuardLayer(options) {
     }
 
     /**
+     * Extract redirect target from a decision, supporting both `RedirectResult`
+     * (from `redirect()`) and the legacy `{ redirect: string }` shape.
+     *
+     * @param {import('./types.js').Decision} decision
+     * @returns {string | null}
+     */
+    function getRedirectTarget(decision) {
+        if (isRedirect(decision)) return decision.url;
+        if (typeof decision === 'object' && decision !== null && 'redirect' in decision) {
+            return decision.redirect;
+        }
+        return null;
+    }
+
+    /**
      * Run guards sequentially. Only the synchronous frame of each guard sees
      * `syncInGuard = true`; once the guard awaits, the flag is cleared and
      * concurrent `nav.*` from outside is allowed (last-write-wins).
@@ -155,8 +172,7 @@ export function createGuardLayer(options) {
 
         try {
             for (;;) {
-                /* c8 ignore next 3 -- unreachable: no await between `currentAbort = controller`
-       and this check, so an external abort cannot interleave. */
+                /* c8 ignore next 3 -- unreachable: no await between `currentAbort = controller` and this check, so an external abort cannot interleave. */
                 if (controller.signal.aborted) {
                     return { decision: 'block', aborted: true };
                 }
@@ -180,8 +196,9 @@ export function createGuardLayer(options) {
                     return { decision: 'block', aborted: false };
                 }
 
-                if (typeof decision === 'object' && decision !== null && 'redirect' in decision) {
-                    const target = decision.redirect;
+                const redirectTarget = getRedirectTarget(decision);
+                if (redirectTarget !== null) {
+                    const target = redirectTarget;
                     if (!isValidRRU(target)) {
                         if (isDev) {
                             throw new TypeError(
@@ -199,10 +216,7 @@ export function createGuardLayer(options) {
                             );
                         }
                         onError?.(
-                            {
-                                type: 'guard-redirect-loop',
-                                path: redirectPath.slice(),
-                            },
+                            { type: 'guard-redirect-loop', path: redirectPath.slice() },
                             { url: currentUrl, from }
                         );
                         return { decision: 'block', aborted: false };
@@ -333,9 +347,18 @@ export function createGuardLayer(options) {
         };
     }
 
+    /**
+     * Current in-flight guard state; `null` when idle. `signal` is the
+     * `AbortSignal` of the in-flight run — aborts when a newer navigation
+     * starts, or a redirect-iteration begins.
+     */
     function pending() {
-        if (!pendingState) return null;
-        return { url: pendingState.url, since: pendingState.since };
+        if (!pendingState || !currentAbort) return null;
+        return {
+            url: pendingState.url,
+            since: pendingState.since,
+            signal: currentAbort.signal,
+        };
     }
 
     return {
@@ -344,4 +367,42 @@ export function createGuardLayer(options) {
         navigate,
         pending,
     };
+}
+
+/**
+ * Create a router with an already-wired guard layer. Replaces the mandatory
+ * 5-step wiring (`createGuardLayer` → `wrapAdapter` → `createRouter` →
+ * `bind` → `navigate()`) with a single call.
+ *
+ * @template S
+ * @template {import('./types.js').RouterMap} R
+ * @param {import('./types.js').CreateGuardedRouterOptions<S, R>} options
+ * @returns {import('./types.js').GuardedRouter<S, R>}
+ */
+export function createGuardedRouter(options) {
+    if (!options || typeof options !== 'object') {
+        throw new TypeError('createGuardedRouter: options must be an object');
+    }
+    if (!options.adapter) {
+        throw new TypeError('createGuardedRouter: options.adapter is required');
+    }
+
+    const guard = createGuardLayer({
+        guards: options.guards,
+        maxRedirects: options.guardMaxRedirects,
+        onError: options.onGuardError,
+        dev: options.dev,
+    });
+    const wrappedAdapter = guard.wrapAdapter(options.adapter);
+    const router = createRouter({
+        resolveMap: options.resolveMap,
+        getState: options.getState,
+        adapter: wrappedAdapter,
+        maxRedirects: options.maxRedirects,
+        onListenerError: options.onListenerError,
+        dev: options.dev,
+    });
+    guard.bind(router);
+    const nav = guard.navigate();
+    return { router, guard, nav };
 }

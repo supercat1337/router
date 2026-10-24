@@ -6,7 +6,6 @@ import { isMap } from './map.js';
 import { isValidRRU, normalizeRRU } from './normalize.js';
 
 /**
- * @typedef {import('./types.js').Router} Router
  * @typedef {import('./types.js').Snapshot} Snapshot
  * @typedef {import('./types.js').RouterMap} RouterMap
  * @typedef {import('./types.js').UrlAdapter} UrlAdapter
@@ -31,8 +30,10 @@ import { isValidRRU, normalizeRRU } from './normalize.js';
  *   4. `const nav = guard.navigate()`
  *
  * @public
- * @param {import('./types.js').CreateRouterOptions} options
- * @returns {Router}
+ * @template S
+ * @template {RouterMap} R
+ * @param {import('./types.js').CreateRouterOptions<S, R>} options
+ * @returns {import('./types.js').Router<S, R>}
  */
 export function createRouter(options) {
     const HISTORY_LIMIT = 50;
@@ -267,6 +268,11 @@ export function createRouter(options) {
         return lastRedirectPath;
     }
 
+    /** @param {(snapshot: Snapshot) => void} listener */
+    function subscribe(listener) {
+        return eventBus.on('commit', ({ snapshot }) => listener(snapshot));
+    }
+
     return {
         adapter,
         navigate,
@@ -284,6 +290,7 @@ export function createRouter(options) {
         },
         getState,
         isCurrent,
+        subscribe,
         on: eventBus.on,
         off: eventBus.off,
         once: eventBus.once,

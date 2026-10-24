@@ -110,6 +110,38 @@ export interface FolderNode<O = FolderOptions, C = Children> {
 export type Node = FileNode | FolderNode;
 
 // =============================================================================
+// Route-name inference
+// =============================================================================
+
+/**
+ * Union of route names derivable from a `createMap` data literal.
+ *
+ * Walks file leaves (`M.name`) and folder subtrees recursively. Wildcard
+ * (`*`) routes are not representable by `name` and are not included.
+ *
+ * @public
+ */
+export type RouteNames<Data> = {
+    [K in keyof Data]: Data[K] extends FileNode<infer M>
+        ? M extends { name: infer N }
+            ? N extends string
+                ? N
+                : never
+            : never
+        : Data[K] extends FolderNode<any, infer C>
+          ? RouteNames<C>
+          : never;
+}[keyof Data];
+
+/**
+ * Extract the route-name parameter from a `RouterMap<Name>`.
+ * Falls back to `string` when `R` is not a parameterized map.
+ *
+ * @public
+ */
+export type RouteNameOf<R> = R extends RouterMap<infer N> ? N : string;
+
+// =============================================================================
 // NotFound, redirect
 // =============================================================================
 
@@ -127,7 +159,7 @@ export interface NotFoundContext {
     url: string;
 
     /** Partial chain of matched nodes; may be empty. */
-    chain: Node[];
+    chain: readonly Node[];
 }
 
 /**
@@ -166,9 +198,12 @@ export interface RedirectResult {
 /**
  * A router map produced by `createMap`. Immutable; do not construct by hand.
  *
+ * `RouteName` is inferred by `createMap` from the data literal; it defaults
+ * to `string` for hand-constructed / unknown maps.
+ *
  * @public
  */
-export interface RouterMap {
+export interface RouterMap<RouteName extends string = string> {
     /** Global fallback handler for URLs that match nothing in this map. */
     readonly notFound: NotFoundHandler;
 
@@ -178,7 +213,7 @@ export interface RouterMap {
      * @throws {TypeError} when `name` is unknown, a `:name` param is missing
      *   or invalid, or the route is a `*` wildcard.
      */
-    url(name: string, params?: Record<string, string>): string;
+    url(name: RouteName, params?: Record<string, string>): string;
 
     /**
      * Match a **normalized** RRU against this map. Caller must call
@@ -195,6 +230,9 @@ export interface RouterMap {
  * partial chain (notFound only); it is the source of values for
  * `urlPrefix(:name)` during chain comparison.
  *
+ * `search` is the parsed query string (decoded). Duplicate keys keep the
+ * last value; use `URLSearchParams` directly for multi-value queries.
+ *
  * @public
  */
 export type MatchResult =
@@ -205,6 +243,8 @@ export type MatchResult =
           chain: Node[];
           /** Decoded `:name` params. */
           params: Record<string, string>;
+          /** Decoded query params. */
+          search: Record<string, string>;
           /** `normalizeRRU(input)`. */
           url: string;
       }
@@ -215,6 +255,8 @@ export type MatchResult =
           chain: Node[];
           /** Decoded params along `chain`. */
           partialParams: Record<string, string>;
+          /** Decoded query params. */
+          search: Record<string, string>;
           /** Handler to invoke (nearest folder or map). */
           handler: NotFoundHandler;
           /** `normalizeRRU(input)`. */
@@ -253,56 +295,66 @@ export type NavigationErrorType =
  * chain (never the partial chain of the failed attempt); diagnostic
  * partial data lives under `error.partialChain` / `error.partialParams`.
  *
+ * The snapshot is deeply frozen at runtime (except `notFoundResult` and
+ * `error.error`, which are app-owned).
+ *
  * @public
  */
 export interface Snapshot {
     /** Transaction identifier; monotonic; not a history position. */
-    navigationId: number;
+    readonly navigationId: number;
 
     /** The committed map; on error, the previous committed map. */
-    map: RouterMap;
+    readonly map: RouterMap;
 
     /** Outcome of the transaction. */
-    status: 'matched' | 'notFound' | 'error';
+    readonly status: 'matched' | 'notFound' | 'error';
 
     /** Full chain (matched), partial chain (notFound), prev chain (error). */
-    chain: Node[];
+    readonly chain: readonly Node[];
 
     /** Decoded params; `{}` unless `status === 'matched'`. */
-    params: Record<string, string>;
+    readonly params: Readonly<Record<string, string>>;
 
     /**
      * Decoded params along `chain`. `{}` for matched,
      * `matchResult.partialParams` for notFound, `chainParams(prev)` for
      * error. Source for `urlPrefix(:name)` in chain comparison.
      */
-    partialParams: Record<string, string>;
+    readonly partialParams: Readonly<Record<string, string>>;
 
     /** RRU at commit time: `normalizeRRU(adapter.read())`. */
-    url: string;
+    readonly url: string;
+
+    /**
+     * Last element of `chain`; `undefined` when `chain` is empty
+     * (notFound/error at the root). Convenience for the common
+     * `snapshot.chain[snapshot.chain.length - 1]` pattern.
+     */
+    readonly leaf: Node | undefined;
 
     /** Render value returned by the `notFound` handler; only for notFound. */
-    notFoundResult?: unknown;
+    readonly notFoundResult?: unknown;
 
     /** Diagnostic payload; only for `status === 'error'`. */
-    error?: {
+    readonly error?: {
         /** Diagnostic type. */
-        type: NavigationErrorType;
+        readonly type: NavigationErrorType;
 
         /** Original exception for `resolver-throw` / `notFound-throw`; else undefined. */
-        error: unknown;
+        readonly error: unknown;
 
         /** RRU for most types; raw input for `invalid-rru` (input). */
-        attemptedUrl: string;
+        readonly attemptedUrl: string;
 
         /** `redirectPath` (normalized RRUs) for `redirect-loop`. */
-        path?: string[];
+        readonly path?: readonly string[];
 
         /** Partial chain of the last LOOP iteration (diagnostic). */
-        partialChain: Node[];
+        readonly partialChain: readonly Node[];
 
         /** Decoded params along `partialChain`. */
-        partialParams: Record<string, string>;
+        readonly partialParams: Readonly<Record<string, string>>;
     };
 }
 
@@ -351,6 +403,14 @@ export interface EventPayloads {
         /** Error snapshot (`status: 'error'`). */
         snapshot: Snapshot;
     };
+
+    /**
+     * Fires exactly once per committed snapshot — after `afterEnter` for
+     * normal transactions, after `navigationError` for prod error snapshots.
+     * This is the single "something changed" event; `Router.subscribe` is a
+     * thin alias over it. Does not fire for no-op `navigate` / `replace`.
+     */
+    commit: { snapshot: Snapshot };
 }
 
 // =============================================================================
@@ -392,9 +452,12 @@ export interface UrlAdapter {
  * (`matched` / `notFound` / `error`) — they return a `Snapshot`. Contract
  * violations (dev) throw; in prod they return an error snapshot.
  *
+ * `S` — application state type; `R` — map type (drives `url()` route-name
+ * completion when the map is a `createMap<...>` result).
+ *
  * @public
  */
-export interface Router {
+export interface Router<S = any, R extends RouterMap = RouterMap> {
     /** The URL adapter passed to `createRouter`. */
     readonly adapter: UrlAdapter;
 
@@ -414,16 +477,28 @@ export interface Router {
     forward(): void;
 
     /** Delegates to the active map's `url`. */
-    url(name: string, params?: Record<string, string>): string;
+    url(name: RouteNameOf<R>, params?: Record<string, string>): string;
 
     /** The most recently committed snapshot. */
     getSnapshot(): Snapshot;
 
     /** The application state getter passed to `createRouter`. */
-    getState(): any;
+    getState(): S;
 
     /** `getSnapshot().navigationId === id`. */
     isCurrent(navigationId: number): boolean;
+
+    /**
+     * Subscribe to committed snapshots — the single "something changed"
+     * hook for framework integrations (`useSyncExternalStore` in React,
+     * `shallowRef` + `watch` in Vue).
+     *
+     * Fires on every commit, including `revalidate()` and prod error
+     * snapshots. Does **not** fire for the initial commit (which happens
+     * inside `createRouter` before this method exists) nor for no-op
+     * `navigate` / `replace` calls. Thin alias of `on('commit', ...)`.
+     */
+    subscribe(listener: (snapshot: Snapshot) => void): () => void;
 
     /** Subscribe to an event. Returns an idempotent unsubscribe. */
     on<E extends keyof EventPayloads>(
@@ -455,7 +530,7 @@ export interface Router {
      * "Where does this lead" without side effects. Normalizes `url` inside.
      * @internal
      */
-    dryMatch(url: string, opts?: { state?: any; map?: RouterMap }): MatchResult;
+    dryMatch(url: string, opts?: { state?: S; map?: RouterMap }): MatchResult;
 
     /** The map of the most recently committed snapshot. @internal */
     getActiveMap(): RouterMap;
@@ -472,12 +547,12 @@ export interface Router {
  *
  * @public
  */
-export interface CreateRouterOptions {
+export interface CreateRouterOptions<S = any, R extends RouterMap = RouterMap> {
     /** Pure `(state, url) → RouterMap`. Must be synchronous. */
-    resolveMap: (ctx: ResolveMapContext) => RouterMap;
+    resolveMap: (ctx: ResolveMapContext<S>) => R;
 
     /** Getter for application state. Called once per transaction. */
-    getState: () => any;
+    getState: () => S;
 
     /** The URL adapter. */
     adapter: UrlAdapter;
@@ -497,9 +572,9 @@ export interface CreateRouterOptions {
  *
  * @public
  */
-export interface ResolveMapContext {
+export interface ResolveMapContext<S = any> {
     /** Application state from `getState()`. */
-    state: any;
+    state: S;
 
     /** Normalized RRU. */
     url: string;
@@ -547,11 +622,48 @@ export type MapValidationErrorCode =
 export type GuardErrorType = 'reentrancy' | 'guard-redirect-loop' | 'invalid-rru' | 'guard-throw';
 
 /**
- * What a single guard returns.
+ * Discriminated payload passed to `OnGuardError`. Narrow on `.type`.
  *
  * @public
  */
-export type Decision = 'allow' | { redirect: string } | { block: true };
+export type GuardErrorPayload =
+    | {
+          /** Guard threw a non-CancelError exception. */
+          type: 'guard-throw';
+          error: unknown;
+      }
+    | {
+          /** Guard redirect cycle detected (dev: throws, prod: `onError`). */
+          type: 'guard-redirect-loop';
+          path: string[];
+      }
+    | {
+          /** Guard returned `{ redirect }` / `redirect()` with a non-RRU target. */
+          type: 'invalid-rru';
+          target: string;
+      }
+    | {
+          /** `nav.navigate` / `nav.replace` called from inside a guard's sync frame. */
+          type: 'reentrancy';
+      };
+
+/**
+ * Hook for guard-layer diagnostics.
+ *
+ * @public
+ */
+export type OnGuardError = (err: GuardErrorPayload, ctx: { url: string; from: Snapshot }) => void;
+
+/**
+ * What a single guard returns.
+ *
+ * `RedirectResult` (from `redirect()`) is preferred; the legacy
+ * `{ redirect: string }` shape is still accepted at runtime and in types
+ * for backward compatibility.
+ *
+ * @public
+ */
+export type Decision = 'allow' | RedirectResult | { redirect: string } | { block: true };
 
 /**
  * Context passed to a guard. `router` is a facade without `navigate` /
@@ -616,8 +728,13 @@ export interface GuardLayer {
         replace(url: string): Promise<NavResult>;
     };
 
-    /** Current in-flight guard state; `null` when idle. */
-    pending(): { url: string; since: number } | null;
+    /**
+     * Current in-flight guard state; `null` when idle. `signal` is the
+     * `AbortSignal` of the in-flight run — aborts when a newer navigation
+     * starts, or a redirect-iteration begins. Use it to cancel in-flight
+     * work when the user triggers a new navigation.
+     */
+    pending(): { url: string; since: number; signal: AbortSignal } | null;
 }
 
 /**
@@ -640,14 +757,60 @@ export interface CreateGuardLayerOptions {
 }
 
 /**
- * Hook for guard-layer diagnostics.
+ * Options accepted by `createGuardedRouter` — merges `CreateRouterOptions`
+ * with `CreateGuardLayerOptions`. `maxRedirects` is the router limit;
+ * `guardMaxRedirects` is the guard limit.
  *
  * @public
  */
-export type OnGuardError = (
-    err: { type: GuardErrorType; [k: string]: any },
-    ctx: { url: string; from: Snapshot }
-) => void;
+export interface CreateGuardedRouterOptions<S = any, R extends RouterMap = RouterMap> {
+    /** Pure `(state, url) → RouterMap`. Must be synchronous. */
+    resolveMap: (ctx: ResolveMapContext<S>) => R;
+
+    /** Getter for application state. Called once per transaction. */
+    getState: () => S;
+
+    /** The base (unwrapped) URL adapter. Wired through `guard.wrapAdapter`. */
+    adapter: UrlAdapter;
+
+    /** Router max redirects per transaction. Default 10. */
+    maxRedirects?: number;
+
+    /** Router listener error hook. Fallback: `console.error`. */
+    onListenerError?: OnListenerError;
+
+    /** Guards to run in order. First non-`allow` stops the chain. */
+    guards: Guard[];
+
+    /** Guard-chain max redirects. Default 10. Independent of `maxRedirects`. */
+    guardMaxRedirects?: number;
+
+    /** Guard diagnostic hook. */
+    onGuardError?: OnGuardError;
+
+    /** Dev flag for both router and guard layer. */
+    dev?: boolean;
+}
+
+/**
+ * Result of `createGuardedRouter` — router, guard, and pre-built
+ * `nav.navigate` / `nav.replace`. Already wired; no `bind()` needed.
+ *
+ * @public
+ */
+export interface GuardedRouter<S = any, R extends RouterMap = RouterMap> {
+    /** The core router (already bound to the guard layer). */
+    router: Router<S, R>;
+
+    /** The guard layer, for `pending()` and manual `wrapAdapter` reuse. */
+    guard: GuardLayer;
+
+    /** Guarded navigate/replace pair; ready for `attachLinks` overrides. */
+    nav: {
+        navigate(url: string): Promise<NavResult>;
+        replace(url: string): Promise<NavResult>;
+    };
+}
 
 // =============================================================================
 // attachLinks

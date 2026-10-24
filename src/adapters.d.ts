@@ -5,5 +5,24 @@
  * @packageDocumentation
  */
 
-export { createPathAdapter } from './path-adapter.js';
-export { createHashAdapter } from './hash-adapter.js';
+import type { UrlAdapter } from './types.js';
+
+export type { UrlAdapter };
+
+/**
+ * Create a path-mode URL adapter (history API, `base` as pathname prefix).
+ *
+ * @public
+ */
+export declare function createPathAdapter(input?: {
+    base?: string;
+}): UrlAdapter;
+
+/**
+ * Create a hash-mode URL adapter (`#/...` in the browser URL).
+ *
+ * @public
+ */
+export declare function createHashAdapter(input?: {
+    base?: string;
+}): UrlAdapter;

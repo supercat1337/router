@@ -1,8 +1,8 @@
 // @ts-check
 
-import { MAP_BRAND } from './internal/symbols.js';
 import { isFile, isFolder, parseKey } from './data-model.js';
-import { match, buildUrl } from './matching.js';
+import { MAP_BRAND } from './internal/symbols.js';
+import { buildUrl, match } from './matching.js';
 
 /**
  * @typedef {import('./types.js').RouterMap} RouterMap
@@ -19,6 +19,14 @@ import { match, buildUrl } from './matching.js';
  * @internal
  */
 export const kKeysMap = Symbol('router.map.keysMap');
+
+/**
+ * Internal symbol: closes over `rootChildren` for `hasRoute` without
+ * leaking tree access to consumers. Populated by `createMap`. Not exported
+ * from the public entry.
+ * @internal
+ */
+const kHasRoute = Symbol('router.map.hasRoute');
 
 /**
  * Thrown by `createMap` when a tree-wide invariant is violated.
@@ -107,6 +115,9 @@ export function createMap(data, options) {
     };
     Object.defineProperty(map, MAP_BRAND, { value: true });
     Object.defineProperty(map, kKeysMap, { value: keyMap });
+    Object.defineProperty(map, kHasRoute, {
+        value: (/** @type {string} */ n) => hasRouteImpl(rootChildren, n),
+    });
     return Object.freeze(map);
 }
 
@@ -157,4 +168,51 @@ function collectTree(children, pathPrefix, seenNames, keyMap) {
 function defaultMessageFor(code, path) {
     const where = path ? ` at ${path}` : '';
     return `Invalid map${where}: ${code}`;
+}
+
+/**
+ * Check whether a route with a canonical URL exists for `name` in `map`.
+ *
+ * Returns `true` iff `map.url(name, ...)` would not throw for the reason
+ * "route not found" — i.e. there is a non-wildcard leaf with
+ * `name === name`. Parameter validity is **not** checked: `hasRoute` may
+ * return `true` while `url(name)` still throws for missing or invalid
+ * `:name` params.
+ *
+ * Wildcard-only routes (`*`) have no canonical URL and return `false`.
+ * Non-map / non-string / empty-string inputs return `false`.
+ *
+ * Intended for one-shot validation of route names from config / feature
+ * flags / external sources at data-load time. O(N) in tree size;
+ * no memoization — do not call per render.
+ *
+ * @public
+ * @param {RouterMap} map
+ * @param {string} name
+ * @returns {boolean}
+ */
+export function hasRoute(map, name) {
+    if (!map || typeof map !== 'object') return false;
+    if (typeof name !== 'string' || name.length === 0) return false;
+    const fn = /** @type {any} */ (map)[kHasRoute];
+    return typeof fn === 'function' ? fn(name) : false;
+}
+
+/**
+ * @internal
+ * @param {Children} children
+ * @param {string} name
+ * @returns {boolean}
+ */
+function hasRouteImpl(children, name) {
+    for (const key of Object.keys(children)) {
+        if (key === '*') continue;
+        const child = children[key];
+        if (isFile(child)) {
+            if (child.name === name) return true;
+        } else if (isFolder(child)) {
+            if (hasRouteImpl(child.children, name)) return true;
+        }
+    }
+    return false;
 }

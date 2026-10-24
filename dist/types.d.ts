@@ -30,7 +30,33 @@ export declare interface AttachLinksOptions {
  */
 export declare type Children = Record<string, FileNode | FolderNode>;
 
-declare type Children_2 = Children;
+/**
+ * Options accepted by `createGuardedRouter` — merges `CreateRouterOptions`
+ * with `CreateGuardLayerOptions`. `maxRedirects` is the router limit;
+ * `guardMaxRedirects` is the guard limit.
+ *
+ * @public
+ */
+export declare interface CreateGuardedRouterOptions<S = any, R extends RouterMap = RouterMap> {
+    /** Pure `(state, url) → RouterMap`. Must be synchronous. */
+    resolveMap: (ctx: ResolveMapContext<S>) => R;
+    /** Getter for application state. Called once per transaction. */
+    getState: () => S;
+    /** The base (unwrapped) URL adapter. Wired through `guard.wrapAdapter`. */
+    adapter: UrlAdapter;
+    /** Router max redirects per transaction. Default 10. */
+    maxRedirects?: number;
+    /** Router listener error hook. Fallback: `console.error`. */
+    onListenerError?: OnListenerError;
+    /** Guards to run in order. First non-`allow` stops the chain. */
+    guards: Guard[];
+    /** Guard-chain max redirects. Default 10. Independent of `maxRedirects`. */
+    guardMaxRedirects?: number;
+    /** Guard diagnostic hook. */
+    onGuardError?: OnGuardError;
+    /** Dev flag for both router and guard layer. */
+    dev?: boolean;
+}
 
 /**
  * Options accepted by `createGuardLayer`.
@@ -51,63 +77,45 @@ export declare interface CreateGuardLayerOptions {
 /**
  * Create an immutable router map.
  *
- * Validates tree-wide invariants — top-level data shape, top-level key
- * syntax, `index` at root, `notFound` presence and function-ness, node
- * construction, name uniqueness. Subtree-shape is already validated by
- * `folder`; this function re-checks the branded-node predicate during
- * traversal but does not re-check key syntax inside folders.
+ * Validates tree-wide invariants and returns a frozen, branded `RouterMap`.
+ * `RouteNames<T>` is inferred from the data literal, so `map.url(name)`
+ * gets compile-time completion and rejects typos.
  *
- * The returned object is frozen and branded; it exposes `notFound`, `url`,
- * and `match`. `isMap` is the only supported way to detect one.
- *
- * @param {Record<string, Node>} data
- * @param {{ notFound: NotFoundHandler }} options
- * @returns {RouterMap}
+ * @public
  */
-export declare function createMap(data: Record<string, Node_3>, options: {
-    notFound: NotFoundHandler_2;
-}): RouterMap_2;
+export declare function createMap<const T extends Record<string, Node_2>>(
+data: T,
+options: { notFound: NotFoundHandler }
+): RouterMap<RouteNames<T>>;
 
-/**
- * @typedef {import('./types.js').Router} Router
- * @typedef {import('./types.js').Snapshot} Snapshot
- * @typedef {import('./types.js').RouterMap} RouterMap
- * @typedef {import('./types.js').UrlAdapter} UrlAdapter
- * @typedef {import('./types.js').EventPayloads} EventPayloads
- * @typedef {import('./types.js').MatchResult} MatchResult
- */
 /**
  * Create a router instance and run the initial transaction.
  *
  * Throws from `createRouter` itself when the initial URL hits a classified
- * diagnostic (`invalid-rru`, `resolver-*`, `notFound-*`, `redirect-loop`,
- * `getState` / `adapter.write` throw) — bootstrap cannot continue without a
- * valid map. After construction, `navigate` / `replace` / `revalidate` never
- * throw on navigation outcomes; they return a `Snapshot` (`status: 'error'`
- * for prod diagnostics).
+ * diagnostic — bootstrap cannot continue without a valid map. After
+ * construction, `navigate` / `replace` / `revalidate` never throw on
+ * navigation outcomes; they return a `Snapshot`.
  *
- * Wiring order with the optional guard layer:
- *   1. `const guard = createGuardLayer({...})`
- *   2. `const router = createRouter({ adapter: guard.wrapAdapter(base), ... })`
- *   3. `guard.bind(router)`
- *   4. `const nav = guard.navigate()`
+ * `S` — application state type; `R` — map type (drives `url()` route-name
+ * completion when the map is a `createMap<...>` result).
  *
  * @public
- * @param {import('./types.js').CreateRouterOptions} options
- * @returns {Router}
  */
-export declare function createRouter(options: CreateRouterOptions): Router_2;
+export declare function createRouter<
+S = any,
+R extends RouterMap = RouterMap,
+>(options: CreateRouterOptions<S, R>): Router<S, R>;
 
 /**
  * Options accepted by `createRouter`.
  *
  * @public
  */
-export declare interface CreateRouterOptions {
+export declare interface CreateRouterOptions<S = any, R extends RouterMap = RouterMap> {
     /** Pure `(state, url) → RouterMap`. Must be synchronous. */
-    resolveMap: (ctx: ResolveMapContext) => RouterMap;
+    resolveMap: (ctx: ResolveMapContext<S>) => R;
     /** Getter for application state. Called once per transaction. */
-    getState: () => any;
+    getState: () => S;
     /** The URL adapter. */
     adapter: UrlAdapter;
     /** Max redirects per transaction. Default 10. Independent of guard's limit. */
@@ -121,9 +129,13 @@ export declare interface CreateRouterOptions {
 /**
  * What a single guard returns.
  *
+ * `RedirectResult` (from `redirect()`) is preferred; the legacy
+ * `{ redirect: string }` shape is still accepted at runtime and in types
+ * for backward compatibility.
+ *
  * @public
  */
-export declare type Decision = 'allow' | {
+export declare type Decision = 'allow' | RedirectResult | {
     redirect: string;
 } | {
     block: true;
@@ -184,22 +196,17 @@ export declare interface EventPayloads {
         /** Error snapshot (`status: 'error'`). */
         snapshot: Snapshot;
     };
+    /**
+     * Fires exactly once per committed snapshot — after `afterEnter` for
+     * normal transactions, after `navigationError` for prod error snapshots.
+     * This is the single "something changed" event; `Router.subscribe` is a
+     * thin alias over it. Does not fire for no-op `navigate` / `replace`.
+     */
+    commit: {
+        snapshot: Snapshot;
+    };
 }
 
-/**
- * @typedef {import('./types.js').FileMeta} FileMeta
- * @typedef {import('./types.js').FolderOptions} FolderOptions
- * @typedef {import('./types.js').FileNode} FileNode
- * @typedef {import('./types.js').FolderNode} FolderNode
- * @typedef {import('./types.js').Children} Children
- * @typedef {import('./types.js').NotFoundHandler} NotFoundHandler
- */
-/**
- * @typedef {{ kind: 'wildcard' }
-     *   | { kind: 'index' }
-     *   | { kind: 'param', name: string }
-     *   | { kind: 'literal' }} ParsedKey
- */
 /**
  * Create a `file` node.
  *
@@ -208,11 +215,12 @@ export declare interface EventPayloads {
  * by `createMap`. Returns a frozen branded object; mutation is a contract
  * violation and is not defended against after freeze.
  *
- * @template {FileMeta} M
- * @param {M} meta
- * @returns {import('./types.js').FileNode<M>}
+ * The `const` type parameter preserves the literal `name` in the inferred
+ * `FileNode<M>`, which feeds `RouteNames<T>` in `createMap`.
+ *
+ * @public
  */
-export declare function file<M extends FileMeta_2>(meta: M): FileNode<M>;
+export declare function file<const M extends FileMeta>(meta: M): FileNode<M>;
 
 declare const FILE_BRAND: unique symbol;
 
@@ -236,8 +244,6 @@ export declare interface FileMeta {
     [key: string]: any;
 }
 
-declare type FileMeta_2 = FileMeta;
-
 /**
  * A leaf node created by `file(meta)`. Branded and frozen; not constructible
  * outside `file()`.
@@ -257,27 +263,19 @@ export declare interface FileNode<M = FileMeta> {
     readonly [key: string]: any;
 }
 
-declare type FileNode_2 = FileNode;
-
 /**
  * Create a `folder` node.
  *
  * Validates the **subtree** — `options` shape, `notFound` (best-effort
  * sync check), `children` keys, `index`/`*` must be files, `:name`
- * collisions. Tree-wide invariants (name uniqueness, top-level `index`,
- * node construction) are enforced by `createMap`.
+ * collisions. Tree-wide invariants are enforced by `createMap`.
  *
- * `notFound` async-ness is checked best-effort via `AsyncFunction`
- * toString inspection; a plain function returning a Promise is not
- * detected here and will surface at runtime as `notFound-promise`.
- *
- * @template {FolderOptions} O
- * @template {Children} C
- * @param {O} options
- * @param {C} children
- * @returns {import('./types.js').FolderNode<O, C>}
+ * @public
  */
-export declare function folder<O extends FolderOptions_2, C extends Children_2>(options: O, children: C): FolderNode<O, C>;
+export declare function folder<
+const O extends FolderOptions,
+const C extends Children,
+>(options: O, children: C): FolderNode<O, C>;
 
 declare const FOLDER_BRAND: unique symbol;
 
@@ -296,8 +294,6 @@ export declare interface FolderNode<O = FolderOptions, C = Children> {
     readonly children: Readonly<C>;
 }
 
-declare type FolderNode_2 = FolderNode;
-
 /**
  * Options for a `folder` node.
  *
@@ -313,8 +309,6 @@ export declare interface FolderOptions {
     /** Application-owned metadata; passed through unchanged. */
     [key: string]: any;
 }
-
-declare type FolderOptions_2 = FolderOptions;
 
 /**
  * A guard: sync or async, returns `Decision`.
@@ -342,6 +336,46 @@ export declare type GuardContext = {
 };
 
 /**
+ * Result of `createGuardedRouter` — router, guard, and pre-built
+ * `nav.navigate` / `nav.replace`. Already wired; no `bind()` needed.
+ *
+ * @public
+ */
+export declare interface GuardedRouter<S = any, R extends RouterMap = RouterMap> {
+    /** The core router (already bound to the guard layer). */
+    router: Router<S, R>;
+    /** The guard layer, for `pending()` and manual `wrapAdapter` reuse. */
+    guard: GuardLayer;
+    /** Guarded navigate/replace pair; ready for `attachLinks` overrides. */
+    nav: {
+        navigate(url: string): Promise<NavResult>;
+        replace(url: string): Promise<NavResult>;
+    };
+}
+
+/**
+ * Discriminated payload passed to `OnGuardError`. Narrow on `.type`.
+ *
+ * @public
+ */
+export declare type GuardErrorPayload = {
+    /** Guard threw a non-CancelError exception. */
+    type: 'guard-throw';
+    error: unknown;
+} | {
+    /** Guard redirect cycle detected (dev: throws, prod: `onError`). */
+    type: 'guard-redirect-loop';
+    path: string[];
+} | {
+    /** Guard returned `{ redirect }` / `redirect()` with a non-RRU target. */
+    type: 'invalid-rru';
+    target: string;
+} | {
+    /** `nav.navigate` / `nav.replace` called from inside a guard's sync frame. */
+    type: 'reentrancy';
+};
+
+/**
  * Diagnostic types for the guard layer's `onError`. Distinct from
  * `NavigationErrorType`: the core does not know about guards.
  *
@@ -364,66 +398,89 @@ export declare interface GuardLayer {
         navigate(url: string): Promise<NavResult>;
         replace(url: string): Promise<NavResult>;
     };
-    /** Current in-flight guard state; `null` when idle. */
+    /**
+     * Current in-flight guard state; `null` when idle. `signal` is the
+     * `AbortSignal` of the in-flight run — aborts when a newer navigation
+     * starts, or a redirect-iteration begins. Use it to cancel in-flight
+     * work when the user triggers a new navigation.
+     */
     pending(): {
         url: string;
         since: number;
+        signal: AbortSignal;
     } | null;
 }
 
 /**
+ * Check whether a route with a canonical URL exists for `name` in `map`.
+ *
+ * Returns `true` iff `map.url(name, ...)` would not throw for the reason
+ * "route not found" — i.e. there is a non-wildcard leaf with
+ * `name === name`. Parameter validity is **not** checked: `hasRoute` may
+ * return `true` while `url(name)` still throws for missing or invalid
+ * `:name` params.
+ *
+ * Wildcard-only routes (`*`) have no canonical URL and return `false`.
+ * Non-map / non-string / empty-string inputs return `false`.
+ *
+ * Intended for one-shot validation of route names from config / feature
+ * flags / external sources at data-load time. O(N) in tree size;
+ * no memoization — do not call per render.
+ *
+ * @public
+ */
+export declare function hasRoute(map: RouterMap, name: string): boolean;
+
+/**
  * Brand check for a `file` node.
  *
- * @param {unknown} x
- * @returns {x is FileNode}
+ * @public
  */
-export declare function isFile(x: unknown): x is FileNode_2;
+export declare function isFile(x: unknown): x is FileNode;
 
 /**
  * Brand check for a `folder` node.
  *
- * @param {unknown} x
- * @returns {x is FolderNode}
+ * @public
  */
-export declare function isFolder(x: unknown): x is FolderNode_2;
+export declare function isFolder(x: unknown): x is FolderNode;
 
 /**
  * Brand check for a `RouterMap`.
  *
- * @param {unknown} x
- * @returns {x is RouterMap}
+ * @public
  */
-export declare function isMap(x: unknown): x is RouterMap_2;
+export declare function isMap(x: unknown): x is RouterMap;
 
 /**
- * Brand check for `RedirectResult`. Runtime narrowing, not a structural
- * check: an object shaped like `{ url }` but without the symbol is not a
- * redirect.
+ * Brand check for `RedirectResult`.
  *
- * @param {unknown} x
- * @returns {x is RedirectResult}
+ * @public
  */
-export declare function isRedirect(x: unknown): x is RedirectResult_2;
+export declare function isRedirect(x: unknown): x is RedirectResult;
 
 /**
  * Thrown by `createMap` when a tree-wide invariant is violated.
  *
  * `code` identifies the invariant; `path` locates the offending node
  * (`/admin/users/:id`) or key (`:id`); `''` when the violation is at the
- * map level with no specific path. Subtree-shape violations are thrown by
- * `folder` as plain `TypeError` and never reach `createMap`.
+ * map level with no specific path.
+ *
+ * @public
  */
 export declare class MapValidationError extends Error {
-    /**
-     * @param {MapValidationErrorCode} code
-     * @param {string} path
-     * @param {string} [message]
-     */
-    constructor(code: MapValidationErrorCode_2, path: string, message?: string);
-    /** @type {MapValidationErrorCode} */
-    code: MapValidationErrorCode_2;
-    /** @type {string} */
+    /** Identifier of the violated invariant. */
+    code: MapValidationErrorCode;
+
+    /** Node or key path; `''` for map-level violations. */
     path: string;
+
+    /**
+     * @param code — identifier of the violated invariant
+     * @param path — node or key path
+     * @param message — optional override; default is `Invalid map at {path}: {code}`
+     */
+    constructor(code: MapValidationErrorCode, path: string, message?: string);
 }
 
 /**
@@ -434,14 +491,15 @@ export declare class MapValidationError extends Error {
  */
 export declare type MapValidationErrorCode = 'data-not-object' | 'data-key-invalid' | 'index-at-root' | 'notFound-missing' | 'notFound-invalid' | 'name-duplicate' | 'node-not-constructed';
 
-declare type MapValidationErrorCode_2 = MapValidationErrorCode;
-
 /**
  * Result of `RouterMap.match`. Always one of the two branches; never `null`.
  *
  * `params` is decoded (matched only). `partialParams` is decoded along the
  * partial chain (notFound only); it is the source of values for
  * `urlPrefix(:name)` during chain comparison.
+ *
+ * `search` is the parsed query string (decoded). Duplicate keys keep the
+ * last value; use `URLSearchParams` directly for multi-value queries.
  *
  * @public
  */
@@ -452,6 +510,8 @@ export declare type MatchResult = {
     chain: Node_2[];
     /** Decoded `:name` params. */
     params: Record<string, string>;
+    /** Decoded query params. */
+    search: Record<string, string>;
     /** `normalizeRRU(input)`. */
     url: string;
 } | {
@@ -461,6 +521,8 @@ export declare type MatchResult = {
     chain: Node_2[];
     /** Decoded params along `chain`. */
     partialParams: Record<string, string>;
+    /** Decoded query params. */
+    search: Record<string, string>;
     /** Handler to invoke (nearest folder or map). */
     handler: NotFoundHandler;
     /** `normalizeRRU(input)`. */
@@ -501,19 +563,13 @@ export declare type NavResult = {
 declare type Node_2 = FileNode | FolderNode;
 export { Node_2 as Node }
 
-declare type Node_3 = Node_2;
-
 /**
- * Single normalization for RRU. Used by the transaction before matching,
- * before history write, and by `RouterMap.match`. Idempotent.
+ * Single normalization for Router-relative URLs (RRU). Idempotent.
  *
- * Strips **all** trailing slashes except for the root `/`. Does not
- * percent-decode, does not normalize case, does not touch search, does not
- * touch leading slashes or internal `//`. Empty string stays empty — the
- * caller (transaction) rejects it as invalid RRU.
+ * Strips all trailing slashes except for the root `/`. Does not
+ * percent-decode, does not normalize case, does not touch search.
  *
- * @param {string} url
- * @returns {string}
+ * @public
  */
 export declare function normalizeRRU(url: string): string;
 
@@ -530,7 +586,7 @@ export declare interface NotFoundContext {
     /** Router-relative URL that failed to match. */
     url: string;
     /** Partial chain of matched nodes; may be empty. */
-    chain: Node_2[];
+    chain: readonly Node_2[];
 }
 
 /**
@@ -540,8 +596,6 @@ export declare interface NotFoundContext {
  * @public
  */
 export declare type NotFoundHandler = (ctx: NotFoundContext) => NotFoundResult;
-
-declare type NotFoundHandler_2 = NotFoundHandler;
 
 /**
  * Return value of a `notFound` handler. Can be any render value;
@@ -556,10 +610,7 @@ export declare type NotFoundResult = unknown;
  *
  * @public
  */
-export declare type OnGuardError = (err: {
-    type: GuardErrorType;
-    [k: string]: any;
-}, ctx: {
+export declare type OnGuardError = (err: GuardErrorPayload, ctx: {
     url: string;
     from: Snapshot;
 }) => void;
@@ -575,25 +626,12 @@ export declare type OnListenerError = (err: unknown, info: {
 }) => void;
 
 /**
- * @typedef {import('./types.js').RedirectResult} RedirectResult
- */
-/**
  * Construct a branded redirect result. Returned from a `notFound` handler
- * to signal "do not commit this URL; go to `url` instead".
+ * or a guard to signal "do not commit this URL; go to `url` instead".
  *
- * The returned object is frozen and carries an internal brand symbol;
- * consumers narrow with `isRedirect` before reading `.url`. Branding
- * distinguishes an intentional redirect from a render value that happens
- * to have a `url` field.
- *
- * The cast goes through `unknown` because the runtime symbol in
- * `symbols.js` and the phantom type symbol in `types.ts` are distinct
- * `unique symbol`s by design — see `types.ts` header for rationale.
- *
- * @param {string} url
- * @returns {RedirectResult}
+ * @public
  */
-export declare function redirect(url: string): RedirectResult_2;
+export declare function redirect(url: string): RedirectResult;
 
 declare const REDIRECT_BRAND: unique symbol;
 
@@ -609,19 +647,39 @@ export declare interface RedirectResult {
     readonly url: string;
 }
 
-declare type RedirectResult_2 = RedirectResult;
-
 /**
  * Context passed to `resolveMap`.
  *
  * @public
  */
-export declare interface ResolveMapContext {
+export declare interface ResolveMapContext<S = any> {
     /** Application state from `getState()`. */
-    state: any;
+    state: S;
     /** Normalized RRU. */
     url: string;
 }
+
+/**
+ * Extract the route-name parameter from a `RouterMap<Name>`.
+ * Falls back to `string` when `R` is not a parameterized map.
+ *
+ * @public
+ */
+export declare type RouteNameOf<R> = R extends RouterMap<infer N> ? N : string;
+
+/**
+ * Union of route names derivable from a `createMap` data literal.
+ *
+ * Walks file leaves (`M.name`) and folder subtrees recursively. Wildcard
+ * (`*`) routes are not representable by `name` and are not included.
+ *
+ * @public
+ */
+export declare type RouteNames<Data> = {
+    [K in keyof Data]: Data[K] extends FileNode<infer M> ? M extends {
+        name: infer N;
+    } ? N extends string ? N : never : never : Data[K] extends FolderNode<any, infer C> ? RouteNames<C> : never;
+}[keyof Data];
 
 /**
  * The router instance produced by `createRouter`.
@@ -630,9 +688,12 @@ export declare interface ResolveMapContext {
  * (`matched` / `notFound` / `error`) — they return a `Snapshot`. Contract
  * violations (dev) throw; in prod they return an error snapshot.
  *
+ * `S` — application state type; `R` — map type (drives `url()` route-name
+ * completion when the map is a `createMap<...>` result).
+ *
  * @public
  */
-export declare interface Router {
+export declare interface Router<S = any, R extends RouterMap = RouterMap> {
     /** The URL adapter passed to `createRouter`. */
     readonly adapter: UrlAdapter;
     /** New transaction, history push. */
@@ -646,13 +707,24 @@ export declare interface Router {
     /** History forward (delegates to `history.forward`). */
     forward(): void;
     /** Delegates to the active map's `url`. */
-    url(name: string, params?: Record<string, string>): string;
+    url(name: RouteNameOf<R>, params?: Record<string, string>): string;
     /** The most recently committed snapshot. */
     getSnapshot(): Snapshot;
     /** The application state getter passed to `createRouter`. */
-    getState(): any;
+    getState(): S;
     /** `getSnapshot().navigationId === id`. */
     isCurrent(navigationId: number): boolean;
+    /**
+     * Subscribe to committed snapshots — the single "something changed"
+     * hook for framework integrations (`useSyncExternalStore` in React,
+     * `shallowRef` + `watch` in Vue).
+     *
+     * Fires on every commit, including `revalidate()` and prod error
+     * snapshots. Does **not** fire for the initial commit (which happens
+     * inside `createRouter` before this method exists) nor for no-op
+     * `navigate` / `replace` calls. Thin alias of `on('commit', ...)`.
+     */
+    subscribe(listener: (snapshot: Snapshot) => void): () => void;
     /** Subscribe to an event. Returns an idempotent unsubscribe. */
     on<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void): () => void;
     /** Remove a listener by identity. No-op if not found. */
@@ -661,14 +733,15 @@ export declare interface Router {
     once<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void): () => void;
 }
 
-declare type Router_2 = Router;
-
 /**
  * A router map produced by `createMap`. Immutable; do not construct by hand.
  *
+ * `RouteName` is inferred by `createMap` from the data literal; it defaults
+ * to `string` for hand-constructed / unknown maps.
+ *
  * @public
  */
-export declare interface RouterMap {
+export declare interface RouterMap<RouteName extends string = string> {
     /** Global fallback handler for URLs that match nothing in this map. */
     readonly notFound: NotFoundHandler;
     /**
@@ -677,7 +750,7 @@ export declare interface RouterMap {
      * @throws {TypeError} when `name` is unknown, a `:name` param is missing
      *   or invalid, or the route is a `*` wildcard.
      */
-    url(name: string, params?: Record<string, string>): string;
+    url(name: RouteName, params?: Record<string, string>): string;
     /**
      * Match a **normalized** RRU against this map. Caller must call
      * `normalizeRRU(url)` first; behavior on non-normalized input is
@@ -685,8 +758,6 @@ export declare interface RouterMap {
      */
     match(url: string): MatchResult;
 }
-
-declare type RouterMap_2 = RouterMap;
 
 /**
  * The committed state of the router after a transaction.
@@ -697,43 +768,52 @@ declare type RouterMap_2 = RouterMap;
  * chain (never the partial chain of the failed attempt); diagnostic
  * partial data lives under `error.partialChain` / `error.partialParams`.
  *
+ * The snapshot is deeply frozen at runtime (except `notFoundResult` and
+ * `error.error`, which are app-owned).
+ *
  * @public
  */
 export declare interface Snapshot {
     /** Transaction identifier; monotonic; not a history position. */
-    navigationId: number;
+    readonly navigationId: number;
     /** The committed map; on error, the previous committed map. */
-    map: RouterMap;
+    readonly map: RouterMap;
     /** Outcome of the transaction. */
-    status: 'matched' | 'notFound' | 'error';
+    readonly status: 'matched' | 'notFound' | 'error';
     /** Full chain (matched), partial chain (notFound), prev chain (error). */
-    chain: Node_2[];
+    readonly chain: readonly Node_2[];
     /** Decoded params; `{}` unless `status === 'matched'`. */
-    params: Record<string, string>;
+    readonly params: Readonly<Record<string, string>>;
     /**
      * Decoded params along `chain`. `{}` for matched,
      * `matchResult.partialParams` for notFound, `chainParams(prev)` for
      * error. Source for `urlPrefix(:name)` in chain comparison.
      */
-    partialParams: Record<string, string>;
+    readonly partialParams: Readonly<Record<string, string>>;
     /** RRU at commit time: `normalizeRRU(adapter.read())`. */
-    url: string;
+    readonly url: string;
+    /**
+     * Last element of `chain`; `undefined` when `chain` is empty
+     * (notFound/error at the root). Convenience for the common
+     * `snapshot.chain[snapshot.chain.length - 1]` pattern.
+     */
+    readonly leaf: Node_2 | undefined;
     /** Render value returned by the `notFound` handler; only for notFound. */
-    notFoundResult?: unknown;
+    readonly notFoundResult?: unknown;
     /** Diagnostic payload; only for `status === 'error'`. */
-    error?: {
+    readonly error?: {
         /** Diagnostic type. */
-        type: NavigationErrorType;
+        readonly type: NavigationErrorType;
         /** Original exception for `resolver-throw` / `notFound-throw`; else undefined. */
-        error: unknown;
+        readonly error: unknown;
         /** RRU for most types; raw input for `invalid-rru` (input). */
-        attemptedUrl: string;
+        readonly attemptedUrl: string;
         /** `redirectPath` (normalized RRUs) for `redirect-loop`. */
-        path?: string[];
+        readonly path?: readonly string[];
         /** Partial chain of the last LOOP iteration (diagnostic). */
-        partialChain: Node_2[];
+        readonly partialChain: readonly Node_2[];
         /** Decoded params along `partialChain`. */
-        partialParams: Record<string, string>;
+        readonly partialParams: Readonly<Record<string, string>>;
     };
 }
 

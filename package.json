@@ -26,7 +26,8 @@
     },
     "types": "dist/types.d.ts",
     "scripts": {
-        "test": "c8 ava",
+        "test": "npm run typecheck && c8 ava",
+        "typecheck": "tsc -p tsconfig.typecheck.json",
         "clean": "shx rm -rf ./dist && shx mkdir ./dist",
         "build_esm": "rollup ./src/index.js --file ./dist/router.esm.js --format es && rollup ./src/adapters.js --file ./dist/adapters.esm.js --format es && rollup ./src/links.js --file ./dist/links.esm.js --format es && rollup ./src/guard.js --file ./dist/guard.esm.js --format es",
         "build_esm_bundle": "esbuild ./src/index.js --format=esm --bundle --platform=neutral --outfile=./dist/router.esm.bundle.js && esbuild ./src/adapters.js --format=esm --bundle --platform=neutral --outfile=./dist/adapters.esm.bundle.js && esbuild ./src/links.js --format=esm --bundle --platform=neutral --outfile=./dist/links.esm.bundle.js && esbuild ./src/guard.js --format=esm --bundle --platform=neutral --outfile=./dist/guard.esm.bundle.js",

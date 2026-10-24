@@ -6,6 +6,7 @@ import { createMap } from '../src/map.js';
 import { createRouter } from '../src/router.js';
 import { createGuardLayer } from '../src/guard.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
+import { redirect } from '../src/redirect.js';
 
 /** @type {import("../src/types.js").NotFoundHandler} */
 const nf = () => null;
@@ -266,7 +267,7 @@ test('reentrancy in dev → nav.navigate throws inside guard', async t => {
     let shouldReenter = false;
 
     const guard = createGuardLayer({
-        guards: [
+        guards: /** @type {import("../src/types.js").Guard[]} */ ([
             async () => {
                 if (shouldReenter) {
                     try {
@@ -277,7 +278,7 @@ test('reentrancy in dev → nav.navigate throws inside guard', async t => {
                 }
                 return 'allow';
             },
-        ],
+        ]),
         dev: true,
     });
     const router = createRouter({
@@ -306,12 +307,12 @@ test('reentrancy in prod → blocked + onError', async t => {
     let shouldReenter = false;
 
     const guard = createGuardLayer({
-        guards: [
+        guards: /** @type {import("../src/types.js").Guard[]} */ ([
             async () => {
                 if (shouldReenter) innerResult = await nav.navigate('/b');
                 return 'allow';
             },
-        ],
+        ]),
         onError: err => errors.push(err),
         dev: false,
     });
@@ -362,4 +363,22 @@ test('pending: reflects current target during redirect', async t => {
     guard.bind(router);
     await guard.navigate().navigate('/old');
     t.deepEqual(seen, ['/old', '/new']);
+});
+
+test('guard accepts branded redirect()', async t => {
+    const adapter = createMemoryAdapter('/login');
+    const guard = createGuardLayer({
+        guards: [ctx => (ctx.url === '/old' ? redirect('/new') : 'allow')],
+        dev: true,
+    });
+    const router = createRouter({
+        resolveMap: () => basicMap(),
+        getState: () => ({}),
+        adapter: guard.wrapAdapter(adapter),
+        dev: true,
+    });
+    guard.bind(router);
+    const result = await guard.navigate().navigate('/old');
+    t.is(result.status, 'committed');
+    if (result.status === 'committed') t.is(result.snapshot.url, '/new');
 });

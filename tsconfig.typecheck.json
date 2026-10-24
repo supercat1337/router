@@ -1,0 +1,5 @@
+{
+    "extends": "./jsconfig.json",
+    "include": ["src/**/*.js", "src/**/*.ts", "type-tests/**/*.ts"],
+    "exclude": ["node_modules", "dist", "coverage", "tests"]
+}

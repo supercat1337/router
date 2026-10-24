@@ -4,18 +4,23 @@
 
 ```ts
 
-// Warning: (ae-forgotten-export) The symbol "UrlAdapter_3" needs to be exported by the entry point adapters.d.ts
-//
 // @public
 export function createHashAdapter(input?: {
     base?: string;
-}): UrlAdapter_3;
+}): UrlAdapter;
 
-// Warning: (ae-forgotten-export) The symbol "UrlAdapter" needs to be exported by the entry point adapters.d.ts
-//
 // @public
 export function createPathAdapter(input?: {
     base?: string;
 }): UrlAdapter;
+
+// @public
+export interface UrlAdapter {
+    readonly base?: string;
+    listen(cb: (event: PopStateEvent | HashChangeEvent) => void): () => void;
+    normalize(href: string): string | null;
+    read(): string;
+    write(url: string, mode: 'push' | 'replace'): void;
+}
 
 ```
