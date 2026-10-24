@@ -36,6 +36,7 @@ import type {
 
 export type {
     AttachLinksOptions,
+    AttachPreloadOptions,
     Children,
     CreateGuardedRouterOptions,
     CreateGuardLayerOptions,

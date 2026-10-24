@@ -829,3 +829,20 @@ export interface AttachLinksOptions {
     /** Override for the replace action. Default: `router.replace`. */
     replace?: (rru: string) => unknown;
 }
+
+/**
+ * Options for `attachPreload`. `preload` receives the matched leaf node —
+ * a `Node` (narrow with `isFile` if you need `.name` / `.load`). Return
+ * value is ignored; a returned Promise is awaited and its rejection is
+ * swallowed (preload is opportunistic).
+ *
+ * @public
+ */
+export interface AttachPreloadOptions {
+    /**
+     * Called when the user hovers or focuses a `[data-router-link]`.
+     * Receives the matched leaf node. Default:
+     * `leaf.preload?.() ?? leaf.load?.()`.
+     */
+    preload?: (leaf: Node) => void | Promise<unknown>;
+}

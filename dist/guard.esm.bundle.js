@@ -1169,6 +1169,7 @@ function createRouter(options) {
   };
   Object.defineProperty(router, ROUTER_BRAND, { value: true });
   Object.defineProperty(router, Symbol.toStringTag, { value: "Router" });
+  Object.freeze(router);
   if (isDev) {
     const hook = (
       /** @type {any} */

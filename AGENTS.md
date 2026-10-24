@@ -2,7 +2,7 @@
 
 > **What this file is.** A function-by-function reference for AI assistants generating code **that uses** `@supercat1337/router`. Not a tutorial (that's `README.md`), not a guide to editing the source (that's `AGENTS.internal.md` on GitHub).
 >
-> **Version.** Verified against `@supercat1337/router@0.2.0`. If you're using a newer version, check `dist/types.d.ts`.
+> **Version.** Verified against `@supercat1337/router@0.3.0`. If you're using a newer version, check `dist/types.d.ts`.
 >
 > **How to use it.** Copy into your project root, or paste the relevant section into the assistant's context.
 
@@ -199,7 +199,7 @@ Returned `Router<S, R>`:
 - **Do not** `await` `navigate` / `replace` / `revalidate` — they are synchronous.
 - **Do not** pass Browser URLs to `navigate` / `replace` — pass RRUs (`/x`, not `https://host/x`).
 - **Do not** use `navigationId` as a component key — compare `url` / `params` instead.
-- **Do not** call `navigate` / `replace` / `revalidate` from inside a listener or a guard's synchronous frame — that's `reentrancy`, diagnosed (throw in dev, current snapshot in prod).
+- **Do not** replace `router.navigate` / `router.replace` / any other method — `router` is frozen. Use `attachLinks(router, { navigate })`, `guard.navigate()`, or `subscribe` for extension points. `adapter` is **not** frozen (test doubles mutate themselves).
 - **Use `subscribe` for framework integration.** Do **not** stitch together `afterEnter` / `afterLeave` / `mapChanged` / `navigationError` — that pattern misses `revalidate()` with an unchanged URL and misses prod error snapshots. See [Common mistakes](#common-mistakes--do--dont).
 - **Devtools hook (not public API).** `createRouter` reads
   `globalThis.__SUPERCAT_ROUTER_DEVTOOLS__` in dev mode and calls
@@ -226,7 +226,7 @@ onMounted(() => {
 });
 ```
 
-## `router.getSnapshot()` returns a stable reference when nothing changed — required by `useSyncExternalStore`.
+`router.getSnapshot()` returns a stable reference when nothing changed — required by `useSyncExternalStore`.
 
 ### Type guards
 
@@ -312,6 +312,27 @@ attachLinks(router, { navigate: nav.navigate, replace: nav.replace });
 - **Selector is fixed** (`[data-router-link]`). Do not invent a custom attribute.
 - `navigate` / `replace` overrides receive an **RRU**, not the raw `href` — `attachLinks` normalizes before calling them.
 - `attachLinks` accepts a structurally-typed router — only `adapter`, `navigate`, `replace` are used. A full `Router` satisfies this.
+
+#### `attachPreload(router, options?) → () => void`
+
+Preload-on-hover/focus complement to `attachLinks`. Calls
+`options.preload(leaf)` when the user hovers (`pointerenter`) or focuses
+(`focusin`) a `[data-router-link]`. Intended to warm the cache that
+`afterEnter` reads from. Each element preloads at most once (`WeakSet`);
+errors are swallowed.
+
+```js
+attachPreload(router, {
+    preload: async leaf => {
+        if (!isFile(leaf) || !leaf.load) return;
+        if (cache.has(leaf.name)) return;
+        cache.set(leaf.name, await leaf.load());
+    },
+});
+```
+
+- **Do not** add custom `mouseenter` listeners on `[data-router-link]` — `attachPreload` handles normalisation, matching, dedupe, and SSR.
+- **Do not** rely on `attachPreload` for correctness — it's opportunistic. `afterEnter` must still load without it.
 
 ---
 
@@ -533,7 +554,17 @@ When generating TypeScript, prefer `createRouter<AppState, typeof map>({...})` o
 - [ ] No `getHistory` / `dryMatch` / `getActiveMap` / `resolveMapFor` / `getRedirectPath`.
 - [ ] Guard wiring: either `createGuardedRouter` (one call) or the exact 5-step order (`wrapAdapter` → `createRouter` → `bind` → `navigate()` → `attachLinks`).
 - [ ] Guard decisions use `redirect('/x')`, not `{ redirect: '/x' }` (legacy).
-- [ ] When reading `snapshot.leaf?.name` in strict TS, narrow with `isFile(leaf)` first.
+- [ ] Preload-on-hover uses `attachPreload(router, { preload })`, not custom `mouseenter` listeners on `[data-router-link]`.
+- [ ] Do not mutate `router` (frozen) — use `attachLinks` options / `guard.navigate()` / `subscribe` for extension points.
+
+---
+
+### Tests and global mutations
+
+Tests that call `installDom()` or mutate `globalThis.__SUPERCAT_ROUTER_DEVTOOLS__`
+must use `test.serial`. AVA runs tests in a file concurrently by default;
+async tests interleave at `await` points, and a `dom.teardown()` from one
+test can delete `document` while another test is still running.
 
 ---
 

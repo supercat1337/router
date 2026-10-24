@@ -304,16 +304,32 @@ Listeners are notified; the return value is ignored. `throw` inside a listener i
 
 **Why `subscribe` exists.** The "stitch together `afterEnter` / `afterLeave` / `mapChanged` / `navigationError`" pattern is subtly wrong: `revalidate()` with an unchanged URL commits a new snapshot but emits **no** `beforeEnter` / `afterEnter` (empty suffix), and prod error snapshots emit only `navigationError`. A framework adapter that listens to the four enter/leave/map events will miss both. `subscribe` fires **exactly once per commit** — it is the only correct hook for `useSyncExternalStore` / Vue `shallowRef`.
 
-### Snapshot is frozen
+### Snapshot and Router are frozen
 
-Every `Snapshot` is deeply frozen at runtime — `chain`, `params`, `partialParams`, and the `error` sub-object. Mutating them throws in strict mode. This makes "committed" a real contract: once `router.getSnapshot()` returns a snapshot, its shape cannot change.
+Every `Snapshot` is deeply frozen at runtime — `chain`, `params`,
+`partialParams`, and the `error` sub-object. The `Router` returned by
+`createRouter` is frozen too: `router.navigate = customFn` throws in
+strict mode. This makes "committed" a real contract for both: once a
+snapshot or router is created, its shape cannot change.
 
-Two fields are app-owned and **not** frozen:
+Official extension points (all present before freeze, all still work):
+
+- `attachLinks(router, { navigate, replace })` — override click handling;
+- `guard.navigate()` — guard-aware navigate/replace;
+- `router.subscribe(fn)` — observe every commit;
+- `router.on(event, fn)` — observe specific events.
+
+`adapter` is **not** frozen: test doubles (`createMemoryAdapter`, mock
+adapters) mutate themselves, and freezing `adapter` would break test
+setups that patch `adapter.write`.
+
+Two snapshot fields are app-owned and **not** frozen:
 
 - `notFoundResult` — whatever your `notFound` handler returned;
 - `error.error` — the original exception from `resolver-throw` / `notFound-throw`.
 
-`snapshot.leaf` is a convenience — it's `chain[chain.length - 1]` or `undefined` for an empty chain (`notFound` / `error` at the root). Use it instead of repeating the index expression.
+`snapshot.leaf` is a convenience — it's `chain[chain.length - 1]` or
+`undefined` for an empty chain (`notFound` / `error` at the root).
 
 ### Typed route names
 
@@ -796,7 +812,10 @@ const adapter = createPathAdapter({ base: '/app/' });
 
 ### `@supercat1337/router/links`
 
-`attachLinks(router, options?)` — one delegated click listener on `document` for `[data-router-link]` elements. Opt-in, no side effects on import, no-op outside the browser.
+Two exports, both opt-in and both no-op outside the browser.
+
+**`attachLinks(router, options?)`** — one delegated click listener on
+`document` for `[data-router-link]` elements.
 
 ```html
 <a href="/profile" data-router-link>Profile</a>
@@ -805,7 +824,39 @@ const adapter = createPathAdapter({ base: '/app/' });
 <!-- router.replace -->
 ```
 
-All URL checks (`cross-origin`, `mailto:`, same-document hash, `#section` in hash mode, etc.) live in `router.adapter.normalize(href)`; `attachLinks` only decides whether the browser should handle the click itself (modifier keys, `target`, `download`, missing `href`).
+All URL checks (`cross-origin`, `mailto:`, same-document hash, `#section`
+in hash mode, etc.) live in `router.adapter.normalize(href)`; `attachLinks`
+only decides whether the browser should handle the click itself (modifier
+keys, `target`, `download`, missing `href`).
+
+**`attachPreload(router, options?)`** — preload the view module on hover
+or focus. Complements `afterEnter`-based [code splitting](#code-splitting):
+warm the user cache before the click.
+
+```js
+import { attachPreload } from '@supercat1337/router/links';
+import { isFile } from '@supercat1337/router';
+
+// Same cache that afterEnter reads from:
+const loaded = new Map();
+
+attachPreload(router, {
+    preload: async leaf => {
+        if (!isFile(leaf) || !leaf.load) return;
+        if (loaded.has(leaf.name)) return;
+        loaded.set(leaf.name, await leaf.load());
+    },
+});
+```
+
+`attachPreload` normalizes the `href`, matches against the **current** map
+(`router.getSnapshot().map`), and calls `preload(leaf)` for the matched
+leaf. Errors from `preload` are swallowed — preload is opportunistic;
+`afterEnter` will retry with proper UX.
+
+Dedupe: each `<a>` element preloads at most once (`WeakSet`). SPA re-renders
+create fresh `<a>` nodes, which preload again — the user cache is the
+second line of defense. Default `preload`: `leaf.preload?.() ?? leaf.load?.()`.
 
 ### `@supercat1337/router/guard`
 
@@ -853,7 +904,7 @@ The core is synchronous; SSR is a natural fit.
 ```
 createMap, file, folder, isMap, isFile, isFolder,
 createRouter, isRouter, redirect, isRedirect, MapValidationError, normalizeRRU,
- hasRoute
+hasRoute
 ```
 
 **Adapters** — `@supercat1337/router/adapters`:
@@ -865,7 +916,7 @@ createPathAdapter, createHashAdapter
 **Links** — `@supercat1337/router/links`:
 
 ```
-attachLinks
+attachLinks, attachPreload
 ```
 
 **Guard layer** — `@supercat1337/router/guard`:
@@ -904,7 +955,7 @@ The test suite (`tests/`) and the API report (`etc/*.api.md`) live **in the GitH
 
 ## Examples
 
-- **`examples/vanilla-spa/`** — ~85-line SPA with two maps, a pure
+- **`examples/vanilla-spa/`** — ~100-line SPA with two maps, a pure
   `resolveMap`, `attachLinks`, `subscribe`, and `revalidate`. No
   framework, no bundler. Run from the repo root:
     ```bash

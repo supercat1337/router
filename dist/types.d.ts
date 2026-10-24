@@ -21,6 +21,23 @@ export declare interface AttachLinksOptions {
 }
 
 /**
+ * Options for `attachPreload`. `preload` receives the matched leaf node —
+ * a `Node` (narrow with `isFile` if you need `.name` / `.load`). Return
+ * value is ignored; a returned Promise is awaited and its rejection is
+ * swallowed (preload is opportunistic).
+ *
+ * @public
+ */
+export declare interface AttachPreloadOptions {
+    /**
+     * Called when the user hovers or focuses a `[data-router-link]`.
+     * Receives the matched leaf node. Default:
+     * `leaf.preload?.() ?? leaf.load?.()`.
+     */
+    preload?: (leaf: Node_2) => void | Promise<unknown>;
+}
+
+/**
  * Valid children of a `folder` node or of a top-level map.
  *
  * Keys are URL-segment patterns: literal (`[A-Za-z0-9._~-]+`), `:name`,

@@ -5,9 +5,9 @@
  * @packageDocumentation
  */
 
-import type { AttachLinksOptions, UrlAdapter } from './types.js';
+import type { AttachLinksOptions, AttachPreloadOptions, Snapshot, UrlAdapter } from './types.js';
 
-export type { AttachLinksOptions, UrlAdapter };
+export type { AttachLinksOptions, AttachPreloadOptions, UrlAdapter };
 
 /**
  * Attach a single delegated click listener on `document` that intercepts
@@ -30,4 +30,24 @@ export declare function attachLinks(
         replace(url: string): unknown;
     },
     options?: AttachLinksOptions
+): () => void;
+
+/**
+ * Attach preload-on-hover/focus to `[data-router-link]` elements. When the
+ * user hovers or focuses a link, normalizes its `href` and calls
+ * `options.preload(leaf)` for the matched leaf node. Intended to warm a
+ * user-owned cache that `afterEnter` reads from.
+ *
+ * Each element preloads at most once (`WeakSet`). Errors from `preload`
+ * are swallowed — preload is opportunistic. SSR-safe: outside the browser
+ * returns a no-op.
+ *
+ * @public
+ */
+export declare function attachPreload(
+    router: {
+        readonly adapter: UrlAdapter;
+        getSnapshot(): Snapshot;
+    },
+    options?: AttachPreloadOptions
 ): () => void;

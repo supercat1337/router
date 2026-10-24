@@ -11,6 +11,11 @@ export interface AttachLinksOptions {
 }
 
 // @public
+export interface AttachPreloadOptions {
+    preload?: (leaf: Node_2) => void | Promise<unknown>;
+}
+
+// @public
 export type Children = Record<string, FileNode | FolderNode>;
 
 // @public

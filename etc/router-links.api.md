@@ -21,6 +21,21 @@ export interface AttachLinksOptions {
 }
 
 // @public
+export function attachPreload(
+router: {
+    readonly adapter: UrlAdapter;
+    getSnapshot(): Snapshot;
+},
+options?: AttachPreloadOptions
+): () => void;
+
+// @public
+export interface AttachPreloadOptions {
+    // Warning: (ae-forgotten-export) The symbol "Node_2" needs to be exported by the entry point links.d.ts
+    preload?: (leaf: Node_2) => void | Promise<unknown>;
+}
+
+// @public
 export interface UrlAdapter {
     readonly base?: string;
     listen(cb: (event: PopStateEvent | HashChangeEvent) => void): () => void;
@@ -28,5 +43,9 @@ export interface UrlAdapter {
     read(): string;
     write(url: string, mode: 'push' | 'replace'): void;
 }
+
+// Warnings were encountered during analysis:
+//
+// dist/types-temp/src/links.d.ts:50:9 - (ae-forgotten-export) The symbol "Snapshot" needs to be exported by the entry point links.d.ts
 
 ```

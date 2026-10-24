@@ -305,12 +305,16 @@ export function createRouter(options) {
     Object.defineProperty(router, ROUTER_BRAND, { value: true });
     Object.defineProperty(router, Symbol.toStringTag, { value: 'Router' });
 
-    // Dev-only: hand the router to a devtools hook, if one is installed.
-    // This is not a public API — it's a side channel extensions discover
-    // by name. The contract: `register(router)` is called synchronously
-    // before `createRouter` returns; if it throws, the error is swallowed
-    // (devtools must never break the app). Multiple routers → multiple
-    // `register` calls; no `unregister` (routers live for the page lifetime).
+    // Freeze: the router is committed for the page lifetime. `navigate`
+    // and friends must not be replaceable — official override points are
+    // `attachLinks(router, { navigate })`, `guard.navigate()`, and
+    // `subscribe`. `adapter` is intentionally NOT frozen (test doubles
+    // like `createMemoryAdapter` mutate themselves).
+    Object.freeze(router);
+
+    // Dev-only: hand the frozen router to a devtools hook, if installed.
+    // The hook receives an already-frozen instance — it must not try to
+    // mutate it; use a WeakMap or its own state instead.
     if (isDev) {
         const hook = /** @type {any} */ (globalThis).__SUPERCAT_ROUTER_DEVTOOLS__;
         if (hook && typeof hook.register === 'function') {
