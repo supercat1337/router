@@ -39,13 +39,16 @@
         "bundle_types": "api-extractor run --local -c api-extractor.json && api-extractor run --local -c api-extractor.adapters.json && api-extractor run --local -c api-extractor.links.json && api-extractor run --local -c api-extractor.guard.json && api-extractor run --local -c api-extractor.active-links.json",
         "build": "npm run clean && npm run build_esm && npm run build_esm_bundle && npm run gen_types && npm run bundle_types && shx rm -rf dist/types-temp",
         "lint": "eslint src/ tests/",
-        "prepublishOnly": "npm run build && npm test"
+        "prepublishOnly": "npm run build && npm test && npm run check-links",
+        "check-links": "node scripts/check-links.mjs",
+        "check-links:list": "node scripts/check-links.mjs --list"
     },
     "devDependencies": {
         "@microsoft/api-extractor": "^7.59.4",
         "ava": "^8.0.1",
         "c8": "^9.1.0",
         "esbuild": "^0.24.0",
+        "markdown-link-check": "^3.15.0",
         "rollup": "^4.60.1",
         "shx": "^0.4.0"
     },
