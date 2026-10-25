@@ -106,14 +106,33 @@ const account = folder({
 
 Returned `RouterMap`:
 
-| Member               | Signature         | Purpose                                                                                                 |
-| :------------------- | :---------------- | :------------------------------------------------------------------------------------------------------ |
-| `notFound`           | `NotFoundHandler` | Fallback handler (read-only)                                                                            |
-| `url(name, params?)` | `→ string`        | Build canonical RRU for a named route. Throws `TypeError` if the name is unknown or a param is missing. |
-| `match(url)`         | `→ MatchResult`   | Match a **normalized** RRU. Returns a discriminated union `matched \| notFound`.                        |
+| Member               | Signature         | Purpose                                                                                                                                               |
+| :------------------- | :---------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `notFound`           | `NotFoundHandler` | Fallback handler (read-only)                                                                                                                          |
+| `url(name, params?)` | `→ string`        | Build canonical RRU for a named route. Params are typed per route. Throws `TypeError` if the name is unknown or a param is missing.                   |
+| `route(name)`        | `→ Route<N, P>`   | Handle to a named route. Frozen, branded (`isRoute`), cached — `map.route(n) === map.route(n)`. Throws `TypeError` on unknown name or wildcard (`*`). |
+| `match(url)`         | `→ MatchResult`   | Match a **normalized** RRU. Returns a discriminated union `matched \| notFound`.                                                                      |
 
 - **Do not** call `map.match(url)` with a Browser URL — pass an RRU (or `normalizeRRU(url)` first).
 - **Do not** mutate the returned map — it's frozen.
+
+#### `map.route(name) → Route<N, P>`
+
+Returns a frozen, branded `Route` handle — a `(name, params)` pair with a `url()` method. Cached per map: `map.route('user') === map.route('user')`.
+
+```js
+const userRoute = map.route('user');
+
+userRoute.name; // 'user' (literal)
+userRoute.params; // ['id'] — readonly string[]
+userRoute.url({ id: '5' }); // '/users/5'
+userRoute.url(); // TypeError (missing param) — and compile error
+```
+
+- **Do not** store a `Route` across map boundaries. It stays bound to its own `RouterMap` and keeps producing that map's URLs after `resolveMap` returns a different one. Use `router.route(name)` to re-bind to the **current** map.
+- **Do not** construct `Route` by hand — `isRoute` will fail. Use `map.route(...)` / `router.route(...)`.
+- **Do not** expect `map.route('catchall')` for wildcard routes — `*` has no canonical URL; `route()` throws `TypeError` (same as `url()` and `hasRoute()`).
+- **Do** use `route.params` for runtime introspection — form rendering, debug panels, config validation. It is the source of truth for the `:name` keys the route requires.
 
 #### `isMap(x) → boolean`
 
@@ -565,6 +584,8 @@ For the top half of this table, the honest recommendation is often: **"if you ne
 Verified type surface (see `dist/types.d.ts`):
 
 - **Route names** — `RouteNames<T>` inferred from the `createMap` data literal (`const` type parameters, TS 5.0+). `map.url("typo")` is a compile error. In JS + JSDoc, only when the data literal is written inline in `createMap(...)`.
+- **Route params** — `RouteParamsFor<T>` collects `:name` keys per route into `{ [N]: Record<string, string> }`. `map.url('user', { id: '5' })` compiles; `map.url('user')`, `map.url('user', { idd: '5' })`, `map.url('user', { id: 42 })` are compile errors. Fallback to `Record<string, string>` for hand-built / unparameterized maps.
+- **`Route<N, P>`** — `map.route(name)` / `router.route(name)` return `Route<N, P>`: `name: N` (literal), `params: readonly (keyof P)[]`, `url(...args: ParamsArgs<P>)`. Frozen, cached, branded (`isRoute`).
 - **Application state** — `createRouter<S, R>` preserves `S` through `getState()` and `resolveMap({ state })`; `state` is never `any` in the hot path.
 - **Router** — `Router<S, R>.url(name)` narrows `name` to `RouteNameOf<R>` (the map's route-name union).
 - **Event payloads** — typed per key: `router.on("afterEnter", p => …)` — `p` is `EventPayloads["afterEnter"]`.
@@ -577,7 +598,6 @@ Verified type surface (see `dist/types.d.ts`):
 
 Not typed (by design, in 0.2):
 
-- **Per-route param keys** — `params` is `Record<string, string>`, not per-route unions.
 - **`MatchResult.search` schema** — `Record<string, string>`, not a per-route query schema.
 
 When generating TypeScript, prefer `createRouter<AppState, typeof map>({...})` over `createRouter({...})` — the explicit generics make the type of `state` in `resolveMap` and the route-name narrowing in `router.url()` predictable.

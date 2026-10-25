@@ -20,7 +20,8 @@ A framework-agnostic routing engine where the active route tree is a **pure func
     - [Transactions are synchronous](#transactions-are-synchronous)
     - [Snapshot is pull, events are push](#snapshot-is-pull-events-are-push)
     - [Snapshot is frozen](#snapshot-is-frozen)
-    - [Typed route names](#typed-route-names)
+    - [Typed route names and params](#typed-route-names-and-params)
+    - [Route objects](#route-objects)
     - [Reading query parameters](#reading-query-parameters)
     - [`navigationId` — transaction id, not history position](#navigationid--transaction-id-not-history-position)
     - [`navigationType` — transaction source, not history direction](#navigationtype--transaction-source-not-history-direction)
@@ -349,28 +350,38 @@ Two snapshot fields are app-owned and **not** frozen:
 `snapshot.leaf` is a convenience — it's `chain[chain.length - 1]` or
 `undefined` for an empty chain (`notFound` / `error` at the root).
 
-### Typed route names
+### Typed route names and params
 
-`createMap` accepts a `const` type parameter, so the data literal is preserved. The result is a `RouterMap<RouteName>` where `RouteName` is the union of every `file({ name })` in the tree:
+`createMap` accepts a `const` type parameter, so the data literal is preserved. The result is a `RouterMap<RouteName, ParamsMap>` where `RouteName` is the union of every `file({ name })` in the tree, and `ParamsMap` maps each name to its accumulated `:name` params.
 
 ```ts
 const map = createMap(
     {
         login: file({ name: 'login' }),
-        users: folder({ ':id': file({ name: 'user' }) }),
+        users: folder({
+            ':id': folder({
+                index: file({ name: 'userHome' }),
+                edit: file({ name: 'userEdit' }),
+            }),
+        }),
     },
     { notFound }
 );
 
 type Names = Parameters<typeof map.url>[0];
-// → 'login' | 'user'
+// → 'login' | 'userHome' | 'userEdit'
 
 map.url('login'); // ✓
-map.url('user', { id: '5' }); // ✓
-map.url('profiel'); // ✗ compile error
+map.url('userHome', { id: '5' }); // ✓ — 'id' required, from :id
+map.url('userHome', { idd: '5' }); // ✗ compile error — unknown param
+map.url('userHome'); // ✗ compile error — missing 'id'
+
+map.url('profiel'); // ✗ compile error — unknown name
 ```
 
-Through `createRouter`, the name type follows the map:
+Params narrow per route. A route with no `:name` accepts no params (or an empty `Record`); a route with `:name` requires the matching keys. `:`-keys accumulate across levels: `/users/:id/edit` → `{ id: string }`, `/reports/:year/:month` → `{ year, month }`.
+
+Through `createRouter`, both narrowing layers follow the map:
 
 ```ts
 const router = createRouter<AppState, typeof map>({
@@ -379,15 +390,54 @@ const router = createRouter<AppState, typeof map>({
     adapter,
 });
 
-router.url('login'); // ✓
+router.url('userHome', { id: '5' }); // ✓
+router.url('userHome'); // ✗ compile error
 router.url('profiel'); // ✗ compile error
 ```
 
 **Caveats:**
 
-- **TS 5.0+ required** for `const` type parameters. On older compilers, names widen to `string` and no completion is offered (the API still works).
+- **TS 5.0+ required** for `const` type parameters. On older compilers, names widen to `string` and params widen to `Record<string, string>` — the API still works, only narrowing is lost.
 - **JS + JSDoc** infers the union only if the data literal is written inline in `createMap(...)`. If you split it into a `const data = {...}` first, the literal type is preserved through `createMap<const T>` but JSDoc may widen in some setups — annotate with `/** @type {const} */` if needed.
-- **Params are not typed per-route.** `params` is `Record<string, string>`. Typed param keys are on the roadmap, not in 0.2.
+- **Fallback to `Record<string, string>`** for hand-built / unparameterized `RouterMap`. If `ParamsMap` is not inferable, `url(name, params?)` accepts any `Record<string, string>` — this is the pre-0.6 behaviour.
+- **`Record<string, string>` is not assignable to `{ id: string }`** — a bare `Record` does not guarantee the key is present. If you have a widened object, type it precisely (`{ id: string; extra: string }`) or cast.
+- **Compile-time cost is real** — `RouteParamsFor<T>` is recursive. Maps with hundreds of files may add a few seconds to `tsc`. The runtime is untouched.
+
+### Route objects
+
+`map.route(name)` and `router.route(name)` return a `Route<N, P>` handle — a frozen, branded, cached object that combines the route name with its params:
+
+```ts
+const userRoute = map.route('userHome');
+
+userRoute.name; // 'userHome' (literal)
+userRoute.params; // ['id'] — runtime, readonly
+userRoute.url({ id: '5' }); // '/users/5'
+userRoute.url(); // ✗ compile error — 'id' required
+userRoute.url({ idd: '5' }); // ✗ compile error — unknown param
+```
+
+`Route` is cached per map — `map.route('userHome') === map.route('userHome')`. Pass the handle around instead of the string name; every call site keeps the typed params.
+
+```js
+// Menu config — name → handle, once
+const menu = [
+    { route: map.route('login'), label: 'Log in' },
+    { route: map.route('userEdit'), label: 'Account' },
+];
+
+menu.forEach(item => {
+    const a = document.createElement('a');
+    a.href = item.route.url(item.route.params.length > 0 ? { id: currentUserId } : undefined);
+    a.textContent = item.label;
+});
+```
+
+`route.params` is the runtime source of truth for the `:name` keys the route requires. Use it to build forms, validate external data, or render debug info without re-parsing the URL.
+
+**Do not store a `Route` across map boundaries.** A `Route` is bound to its own `RouterMap` — the same object keeps producing URLs for that map even after `resolveMap` returns a different one. When the active map may have changed (auth, tenant, feature flag), call `router.route(name)` again to bind to the current map.
+
+Use `isRoute(x)` to brand-check a handle — `instanceof` will not work, and structural lookalikes return `false` (same convention as `isMap` / `isFile` / `isRouter`).
 
 ### Reading query parameters
 
@@ -1151,4 +1201,6 @@ If you are generating code against this package:
 - **Code splitting uses `FileMeta.load`; hover/focus preload uses `FileMeta.preload`.** `load` is `() => Promise<unknown>` — call it without arguments in `afterEnter` (`import()` is signal-free). `preload` is `(ctx: PreloadContext) => void | Promise<unknown>` — forward `ctx.signal` to cancellable work. `attachPreload`'s default follows `leaf.preload?.(ctx) ?? leaf.load?.()`. Do **not** call `leaf.preload()` without `ctx`.
 - **Framework integration** uses `router.subscribe` — one subscription, fires on every commit. Do **not** stitch together `afterEnter` / `afterLeave` / `mapChanged` / `navigationError`: that pattern misses `revalidate()` without a URL change and misses prod error snapshots.
 - **Route names from external data** are validated with `hasRoute(map, name)` **once at data-load time**, not with `try/catch` around every `url()` call. `hasRoute` does **not** validate params — `url(name)` may still throw for missing `:name` values.
+- **Route objects** — prefer `map.route(name)` / `router.route(name)` over repeated `map.url(name, params)` when the same route is used multiple times (menu configs, render helpers, form builders). Handles are cached and identity-stable. **Do not** store a `Route` in module-level state or pass it across `resolveMap` boundaries — it stays bound to its own map. Call `router.route(name)` after a map switch.
+- **Typed params** — `map.url(name, params)` and `route.url(params)` narrow `params` per route. Do **not** cast to `any` to silence a "missing param" error — the error is real (runtime `TypeError` too). Do **not** pass a bare `Record<string, string>` where `{ id: string }` is expected — TS2345 is correct; type the object precisely or cast explicitly with a comment.
 - **Redirects in guards** use `redirect('/x')` (branded) — `isRedirect()` narrows everywhere. The legacy `{ redirect: '/x' }` shape is accepted for backward compatibility but should not be introduced in new code.
