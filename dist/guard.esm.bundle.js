@@ -23,6 +23,7 @@ var FOLDER_BRAND = Symbol("spa-router.folder");
 var MAP_BRAND = Symbol("spa-router.map");
 var REDIRECT_BRAND = Symbol("spa-router.redirect");
 var ROUTER_BRAND = Symbol("spa-router.router");
+var ROUTE_BRAND = Symbol("spa-router.route");
 
 // src/redirect.js
 function isRedirect(x) {
@@ -1107,11 +1108,24 @@ function createRouter(options) {
       inTransaction = false;
     }
   });
-  function url(name, params) {
+  function url(name, ...args) {
     if (!currentSnapshot) {
       throw new TypeError("url(): no committed snapshot");
     }
-    return currentSnapshot.map.url(name, params);
+    return currentSnapshot.map.url(
+      name,
+      .../** @type {[params?: Record<string, string>]} */
+      args
+    );
+  }
+  function route(name) {
+    if (!currentSnapshot) {
+      throw new TypeError("route(): no committed snapshot");
+    }
+    return (
+      /** @type {any} */
+      currentSnapshot.map.route(name)
+    );
   }
   function isCurrent(id) {
     return currentSnapshot !== null && currentSnapshot.navigationId === id;
@@ -1178,6 +1192,7 @@ function createRouter(options) {
       if (typeof history !== "undefined") history.forward();
     },
     url,
+    route,
     getSnapshot() {
       return (
         /** @type {Snapshot} */
@@ -1248,7 +1263,18 @@ function createGuardLayer(options) {
       getSnapshot: () => r.getSnapshot(),
       getState: () => r.getState(),
       isCurrent: (id) => r.isCurrent(id),
-      url: (name, params) => r.url(name, params)
+      /**
+       * @param {string} name
+       * @param {...any} args
+       * @returns {string}
+       */
+      url(name, ...args) {
+        return r.url(
+          name,
+          .../** @type {[params?: Record<string, string>]} */
+          args
+        );
+      }
     };
   }
   function isCancelError(e) {

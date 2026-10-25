@@ -4,6 +4,7 @@ var FOLDER_BRAND = Symbol("spa-router.folder");
 var MAP_BRAND = Symbol("spa-router.map");
 var REDIRECT_BRAND = Symbol("spa-router.redirect");
 var ROUTER_BRAND = Symbol("spa-router.router");
+var ROUTE_BRAND = Symbol("spa-router.route");
 
 // src/data-model.js
 function file(meta) {
@@ -295,6 +296,28 @@ function buildUrlImpl(children, name, params, pathSoFar) {
   return null;
 }
 
+// src/route.js
+function createRoute({ name, params, buildUrl: buildUrl2 }) {
+  return (
+    /** @type {Route} */
+    Object.freeze(
+      /** @type {any} */
+      {
+        name,
+        params: Object.freeze([...params]),
+        url(p) {
+          return buildUrl2(p);
+        },
+        [ROUTE_BRAND]: true
+      }
+    )
+  );
+}
+function isRoute(x) {
+  return x !== null && typeof x === "object" && /** @type {any} */
+  x[ROUTE_BRAND] === true;
+}
+
 // src/map.js
 var kKeysMap = Symbol("router.map.keysMap");
 var kHasRoute = Symbol("router.map.hasRoute");
@@ -338,13 +361,17 @@ function createMap(data, options) {
   }
   const seenNames = /* @__PURE__ */ new Set();
   const keyMap = /* @__PURE__ */ new WeakMap();
+  const leafParams = /* @__PURE__ */ new Map();
   collectTree(
     /** @type {Children} */
     data,
     "",
     seenNames,
-    keyMap
+    keyMap,
+    leafParams,
+    []
   );
+  const routeCache = /* @__PURE__ */ new Map();
   const notFound = options.notFound;
   const rootChildren = (
     /** @type {Children} */
@@ -352,8 +379,34 @@ function createMap(data, options) {
   );
   const map = {
     notFound,
-    url(name, params) {
-      return buildUrl(rootChildren, name, params);
+    /**
+     * @param {string} name
+     * @param {...any} args
+     * @returns {string}
+     */
+    url(name, ...args) {
+      return buildUrl(rootChildren, name, args[0]);
+    },
+    route(name) {
+      const cached = routeCache.get(name);
+      if (cached) return (
+        /** @type {any} */
+        cached
+      );
+      const params = leafParams.get(name);
+      if (params === void 0) {
+        throw new TypeError(`route(): route ${JSON.stringify(name)} not found in this map`);
+      }
+      const r = createRoute({
+        name,
+        params,
+        buildUrl: (p) => buildUrl(rootChildren, name, p)
+      });
+      routeCache.set(name, r);
+      return (
+        /** @type {any} */
+        r
+      );
     },
     match(url) {
       return match(rootChildren, url, notFound);
@@ -370,7 +423,7 @@ function isMap(x) {
   return x !== null && typeof x === "object" && /** @type {any} */
   x[MAP_BRAND] === true;
 }
-function collectTree(children, pathPrefix, seenNames, keyMap) {
+function collectTree(children, pathPrefix, seenNames, keyMap, leafParams, parentParams) {
   for (const key of Object.keys(children)) {
     const childPath = pathPrefix + "/" + key;
     const child = children[key];
@@ -378,14 +431,18 @@ function collectTree(children, pathPrefix, seenNames, keyMap) {
       throw new MapValidationError("node-not-constructed", childPath);
     }
     keyMap.set(child, key);
+    const childParams = key.startsWith(":") ? [...parentParams, key.slice(1)] : parentParams;
     if (isFile(child)) {
       if (seenNames.has(child.name)) {
         throw new MapValidationError("name-duplicate", childPath);
       }
       seenNames.add(child.name);
+      if (key !== "*") {
+        leafParams.set(child.name, Object.freeze(childParams));
+      }
     }
     if (isFolder(child)) {
-      collectTree(child.children, childPath, seenNames, keyMap);
+      collectTree(child.children, childPath, seenNames, keyMap, leafParams, childParams);
     }
   }
 }
@@ -1500,11 +1557,24 @@ function createRouter(options) {
       inTransaction = false;
     }
   });
-  function url(name, params) {
+  function url(name, ...args) {
     if (!currentSnapshot) {
       throw new TypeError("url(): no committed snapshot");
     }
-    return currentSnapshot.map.url(name, params);
+    return currentSnapshot.map.url(
+      name,
+      .../** @type {[params?: Record<string, string>]} */
+      args
+    );
+  }
+  function route(name) {
+    if (!currentSnapshot) {
+      throw new TypeError("route(): no committed snapshot");
+    }
+    return (
+      /** @type {any} */
+      currentSnapshot.map.route(name)
+    );
   }
   function isCurrent(id) {
     return currentSnapshot !== null && currentSnapshot.navigationId === id;
@@ -1571,6 +1641,7 @@ function createRouter(options) {
       if (typeof history !== "undefined") history.forward();
     },
     url,
+    route,
     getSnapshot() {
       return (
         /** @type {Snapshot} */
@@ -1621,6 +1692,7 @@ export {
   isFolder,
   isMap,
   isRedirect,
+  isRoute,
   isRouter,
   normalizeRRU,
   redirect

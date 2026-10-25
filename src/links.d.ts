@@ -8,12 +8,55 @@
 import type {
     AttachLinksOptions,
     AttachPreloadOptions,
+    Children,
+    FileMeta,
+    FileNode,
+    FolderNode,
+    FolderOptions,
+    MatchResult,
+    NavigationErrorType,
+    NavigationType,
+    Node,
+    NotFoundContext,
+    NotFoundHandler,
+    NotFoundResult,
+    ParamsArgs,
     PreloadContext,
+    Route,
+    RouteParamsOf,
+    RouterMap,
     Snapshot,
     UrlAdapter,
 } from './types.js';
 
-export type { AttachLinksOptions, AttachPreloadOptions, PreloadContext, UrlAdapter };
+export type {
+    AttachLinksOptions,
+    AttachPreloadOptions,
+    PreloadContext,
+    UrlAdapter,
+    // Transitive — Snapshot appears in public signatures; api-extractor
+    // requires every type reachable through it to be re-exported here.
+    MatchResult,
+    NavigationErrorType,
+    NavigationType,
+    Node,
+    NotFoundContext,
+    NotFoundHandler,
+    NotFoundResult,
+    ParamsArgs,
+    Route,
+    RouteParamsOf,
+    RouterMap,
+    Snapshot,
+    // Transitive — Node = FileNode | FolderNode; FileMeta / FolderOptions /
+    // Children are their default generic arguments. Without these, the
+    // recursive closure is still "forgotten".
+    Children,
+    FileMeta,
+    FileNode,
+    FolderNode,
+    FolderOptions,
+};
 
 /**
  * Attach a single delegated click listener on `document` that intercepts

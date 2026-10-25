@@ -85,7 +85,17 @@ export function createGuardLayer(options) {
             getSnapshot: () => r.getSnapshot(),
             getState: () => r.getState(),
             isCurrent: id => r.isCurrent(id),
-            url: (name, params) => r.url(name, params),
+            /**
+             * @param {string} name
+             * @param {...any} args
+             * @returns {string}
+             */
+            url(name, ...args) {
+                return r.url(
+                    name,
+                    ...(/** @type {[params?: Record<string, string>]} */ (args))
+                );
+            },
         };
     }
 

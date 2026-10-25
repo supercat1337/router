@@ -92,7 +92,7 @@ export declare interface AttachPreloadOptions {
  *
  * @public
  */
-declare type Children = Record<string, FileNode | FolderNode>;
+export declare type Children = Record<string, FileNode | FolderNode>;
 
 declare const FILE_BRAND: unique symbol;
 
@@ -105,7 +105,7 @@ declare const FILE_BRAND: unique symbol;
  *
  * @public
  */
-declare interface FileMeta {
+export declare interface FileMeta {
     /** Unique route name; used by `url(name)`. */
     name: string;
     /** Optional human-readable title. */
@@ -137,7 +137,7 @@ declare interface FileMeta {
  *
  * @public
  */
-declare interface FileNode<M = FileMeta> {
+export declare interface FileNode<M = FileMeta> {
     /** Phantom brand; runtime check via `isFile`. */
     readonly [FILE_BRAND]: true;
     /** Unique route name; used by `RouterMap.url(name)`. */
@@ -158,7 +158,7 @@ declare const FOLDER_BRAND: unique symbol;
  *
  * @public
  */
-declare interface FolderNode<O = FolderOptions, C = Children> {
+export declare interface FolderNode<O = FolderOptions, C = Children> {
     /** Phantom brand; runtime check via `isFolder`. */
     readonly [FOLDER_BRAND]: true;
     /** Optional fallback handler for this subtree. */
@@ -172,7 +172,7 @@ declare interface FolderNode<O = FolderOptions, C = Children> {
  *
  * @public
  */
-declare interface FolderOptions {
+export declare interface FolderOptions {
     /**
      * Handler for "nothing in this subtree matched". Optional; when omitted,
      * the nearest ancestor with a `notFound` handles the miss, up to
@@ -195,7 +195,7 @@ declare interface FolderOptions {
  *
  * @public
  */
-declare type MatchResult = {
+export declare type MatchResult = {
     /** The URL matched a leaf. */
     status: 'matched';
     /** Full chain from root to leaf. */
@@ -230,7 +230,7 @@ declare type MatchResult = {
  *
  * @public
  */
-declare type NavigationErrorType = 'invalid-rru' | 'resolver-null' | 'resolver-promise' | 'resolver-throw' | 'resolver-invalid' | 'notFound-promise' | 'notFound-throw' | 'redirect-loop';
+export declare type NavigationErrorType = 'invalid-rru' | 'resolver-null' | 'resolver-promise' | 'resolver-throw' | 'resolver-invalid' | 'notFound-promise' | 'notFound-throw' | 'redirect-loop';
 
 /**
  * How the transaction that produced a `Snapshot` was initiated.
@@ -252,6 +252,7 @@ declare type NavigationErrorType = 'invalid-rru' | 'resolver-null' | 'resolver-p
  * @public
  */
 declare type NavigationType_2 = 'initial' | 'push' | 'replace' | 'pop' | 'revalidate';
+export { NavigationType_2 as NavigationType }
 
 /**
  * Either kind of route node.
@@ -259,6 +260,7 @@ declare type NavigationType_2 = 'initial' | 'push' | 'replace' | 'pop' | 'revali
  * @public
  */
 declare type Node_2 = FileNode | FolderNode;
+export { Node_2 as Node }
 
 /**
  * Context passed to a `notFound` handler.
@@ -269,7 +271,7 @@ declare type Node_2 = FileNode | FolderNode;
  *
  * @public
  */
-declare interface NotFoundContext {
+export declare interface NotFoundContext {
     /** Router-relative URL that failed to match. */
     readonly url: string;
     /** Partial chain of matched nodes; may be empty. */
@@ -286,7 +288,7 @@ declare interface NotFoundContext {
  *
  * @public
  */
-declare type NotFoundHandler = (ctx: NotFoundContext) => NotFoundResult;
+export declare type NotFoundHandler = (ctx: NotFoundContext) => NotFoundResult;
 
 /**
  * Return value of a `notFound` handler. Can be any render value;
@@ -294,7 +296,21 @@ declare type NotFoundHandler = (ctx: NotFoundContext) => NotFoundResult;
  *
  * @public
  */
-declare type NotFoundResult = unknown;
+export declare type NotFoundResult = unknown;
+
+/**
+ * Argument tuple for `url(...)` and `Route.url(...)`.
+ *
+ * - `Record<string, string>` (unparameterized map, fallback): `[params?]` — optional.
+ * - `{}` (route without `:name`): `[params?]` — optional.
+ * - `{ id: string }` (route with params): `[params]` — **required**.
+ *
+ * Rest-of-single-tuple is used so callers can spread `...args` without
+ * a `[] | [P]` union — TS treats this as "0 or 1 argument" cleanly.
+ *
+ * @public
+ */
+export declare type ParamsArgs<P extends Record<string, string>> = string extends keyof P ? [params?: Record<string, string>] : [keyof P] extends [never] ? [params?: Record<string, string>] : [params: P];
 
 /**
  * Context passed to a preload function.
@@ -311,6 +327,43 @@ export declare interface PreloadContext {
 }
 
 /**
+ * A handle to a single named route inside a `RouterMap`.
+ *
+ * `Route` is immutable, branded (`isRoute`), and cached per `RouterMap` —
+ * `map.route(name) === map.route(name)`.
+ *
+ * **Do not store a `Route` across map boundaries.** When the active map
+ * changes (auth, tenant, feature flag), routes of the previous map may
+ * not exist in the new one — call `router.route(name)` again to get a
+ * handle bound to the current map.
+ *
+ * @public
+ */
+export declare interface Route<N extends string = string, P extends Record<string, string> = Record<string, string>> {
+    /** Route name; the key used by `RouterMap.url(name)`. */
+    readonly name: N;
+    /**
+     * `:name` parameter keys extracted from the tree, in path order.
+     * Empty for routes without params.
+     */
+    readonly params: readonly (keyof P & string)[];
+    /**
+     * Build the canonical RRU for this route.
+     *
+     * @throws {TypeError} when a `:name` param is missing or invalid.
+     */
+    url(...args: ParamsArgs<P>): string;
+}
+
+/**
+ * Extract params for a specific route name from a `RouterMap`.
+ * Falls back to `Record<string, string>` for hand-built / unparameterized maps.
+ *
+ * @public
+ */
+export declare type RouteParamsOf<R, N extends string> = R extends RouterMap<any, infer P> ? N extends keyof P ? P[N] : Record<string, string> : Record<string, string>;
+
+/**
  * A router map produced by `createMap`. Immutable; do not construct by hand.
  *
  * `RouteName` is inferred by `createMap` from the data literal; it defaults
@@ -318,16 +371,28 @@ export declare interface PreloadContext {
  *
  * @public
  */
-declare interface RouterMap<RouteName extends string = string> {
-    /** Global fallback handler for URLs that match nothing in this map. */
+export declare interface RouterMap<RouteName extends string = string, ParamsMap extends Record<string, Record<string, string>> = Record<string, Record<string, string>>> {
+    /**
+     * Global fallback handler for URLs that match nothing in this map.
+     * Used when no folder along the partial chain provides its own
+     * `notFound`.
+     */
     readonly notFound: NotFoundHandler;
     /**
      * Build a canonical RRU for a named route.
      *
-     * @throws {TypeError} when `name` is unknown, a `:name` param is missing
-     *   or invalid, or the route is a `*` wildcard.
+     * @throws {TypeError} when `name` is unknown, a `:name` param is
+     *   missing or invalid, or the route is a `*` wildcard.
      */
-    url(name: RouteName, params?: Record<string, string>): string;
+    url<N extends RouteName>(name: N, ...args: ParamsArgs<RouteParamsOf<this, N>>): string;
+    /**
+     * Handle to a named route. Cached — the same object is returned for
+     * repeated calls with the same name.
+     *
+     * @throws {TypeError} when `name` is unknown or the route is a `*`
+     *   wildcard.
+     */
+    route<N extends RouteName>(name: N): Route<N, RouteParamsOf<this, N>>;
     /**
      * Match a **normalized** RRU against this map. Caller must call
      * `normalizeRRU(url)` first; behavior on non-normalized input is
@@ -350,7 +415,7 @@ declare interface RouterMap<RouteName extends string = string> {
  *
  * @public
  */
-declare interface Snapshot {
+export declare interface Snapshot {
     /** Transaction identifier; monotonic; not a history position. */
     readonly navigationId: number;
     /**

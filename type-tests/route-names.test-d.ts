@@ -61,8 +61,8 @@ type _NestedName = Expect<
     Equal<Parameters<typeof nested.url>[0], 'adminHome' | 'adminUser' | 'login'>
 >;
 
-nested.url('adminHome');
-nested.url('adminUser');
+nested.url('adminHome'); // OK — adminHome has no :name
+nested.url('adminUser', { id: '5' }); // OK — adminUser requires :id
 
 // @ts-expect-error — ':id' is a path pattern, not a route name
 nested.url(':id');

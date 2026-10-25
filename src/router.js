@@ -161,14 +161,31 @@ export function createRouter(options) {
 
     /**
      * @param {string} name
-     * @param {Record<string, string>} [params]
+     * @param {...any} args
+     * @returns {string}
      */
-    function url(name, params) {
+    function url(name, ...args) {
         /* c8 ignore next 3 -- unreachable: createRouter commits initial before returning */
         if (!currentSnapshot) {
             throw new TypeError('url(): no committed snapshot');
         }
-        return currentSnapshot.map.url(name, params);
+        // ParamsArgs<P> is a single-element tuple at runtime; spread is fine.
+        return currentSnapshot.map.url(
+            name,
+            .../** @type {[params?: Record<string, string>]} */ (args)
+        );
+    }
+
+    /**
+     * @param {string} name
+     * @returns {any}
+     */
+    function route(name) {
+        /* c8 ignore next 3 -- unreachable: createRouter commits initial before returning */
+        if (!currentSnapshot) {
+            throw new TypeError('route(): no committed snapshot');
+        }
+        return /** @type {any} */ (currentSnapshot.map.route(name));
     }
 
     /**
@@ -286,6 +303,7 @@ export function createRouter(options) {
             if (typeof history !== 'undefined') history.forward();
         },
         url,
+        route,
         getSnapshot() {
             return /** @type {Snapshot} */ (currentSnapshot);
         },

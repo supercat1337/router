@@ -5,9 +5,55 @@
  * @packageDocumentation
  */
 
-import type { AttachActiveLinksOptions, Snapshot, UrlAdapter } from './types.js';
+import type {
+    AttachActiveLinksOptions,
+    Children,
+    FileMeta,
+    FileNode,
+    FolderNode,
+    FolderOptions,
+    MatchResult,
+    NavigationErrorType,
+    NavigationType,
+    Node,
+    NotFoundContext,
+    NotFoundHandler,
+    NotFoundResult,
+    ParamsArgs,
+    PreloadContext,
+    Route,
+    RouteParamsOf,
+    RouterMap,
+    Snapshot,
+    UrlAdapter,
+} from './types.js';
 
-export type { AttachActiveLinksOptions, Snapshot, UrlAdapter };
+export type {
+    AttachActiveLinksOptions,
+    UrlAdapter,
+    // Transitive — Snapshot appears in the public signature; api-extractor
+    // requires every type reachable through it to be re-exported here.
+    MatchResult,
+    NavigationErrorType,
+    NavigationType,
+    Node,
+    NotFoundContext,
+    NotFoundHandler,
+    NotFoundResult,
+    ParamsArgs,
+    Route,
+    RouteParamsOf,
+    RouterMap,
+    Snapshot,
+    // Transitive — Node = FileNode | FolderNode; FileMeta.preload uses
+    // PreloadContext. Without these, the closure is still "forgotten".
+    Children,
+    FileMeta,
+    FileNode,
+    FolderNode,
+    FolderOptions,
+    PreloadContext,
+};
 
 /**
  * Attach `aria-current`-marking to `[data-router-link]` elements.

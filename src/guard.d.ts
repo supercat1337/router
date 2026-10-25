@@ -5,50 +5,49 @@
  *
  * @packageDocumentation
  */
-import type {
-    CreateGuardLayerOptions,
-    CreateGuardedRouterOptions,
-    GuardedRouter,
-    GuardLayer,
-    RouterMap,
-} from './types.js';
 
 export type {
+    // Transitive — api-extractor requires every type in a public signature
+    // to be re-exported from this entry point.
+    Children,
+    CreateGuardedRouterOptions,
     // Own surface
     CreateGuardLayerOptions,
-    CreateGuardedRouterOptions,
+    CreateRouterOptions,
     Decision,
+    EventPayloads,
+    FileMeta,
+    FileNode,
+    FolderNode,
+    FolderOptions,
     Guard,
     GuardContext,
     GuardedRouter,
     GuardErrorPayload,
     GuardErrorType,
     GuardLayer,
-    NavResult,
-    OnGuardError,
-    // Transitive — api-extractor requires every type in a public signature
-    // to be re-exported from this entry point.
-    Children,
-    CreateRouterOptions,
-    EventPayloads,
-    FileMeta,
-    FileNode,
-    FolderNode,
-    FolderOptions,
     MapValidationErrorCode,
     MatchResult,
     NavigationErrorType,
     NavigationType,
+    NavResult,
     Node,
     NotFoundContext,
     NotFoundHandler,
     NotFoundResult,
+    OnGuardError,
     OnListenerError,
+    ParamsArgs,
+    ParamNameOf,
     PreloadContext,
     RedirectResult,
     ResolveMapContext,
+    Route,
     RouteNameOf,
     RouteNames,
+    RouteParamsFor,
+    RouteParamsForName,
+    RouteParamsOf,
     Router,
     RouterMap,
     Snapshot,

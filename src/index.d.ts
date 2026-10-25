@@ -8,9 +8,6 @@
  */
 
 import type {
-    AttachActiveLinksOptions,
-    AttachLinksOptions,
-    AttachPreloadOptions,
     Children,
     CreateRouterOptions,
     EventPayloads,
@@ -29,10 +26,16 @@ import type {
     Node,
     NotFoundHandler,
     OnListenerError,
+    ParamsArgs,
+    ParamNameOf,
     PreloadContext,
     RedirectResult,
     ResolveMapContext,
+    Route,
     RouteNames,
+    RouteParamsFor,
+    RouteParamsForName,
+    RouteParamsOf,
     Router,
     RouterMap,
     Snapshot,
@@ -70,11 +73,17 @@ export type {
     NotFoundResult,
     OnGuardError,
     OnListenerError,
+    ParamsArgs,
+    ParamNameOf,
     PreloadContext,
     RedirectResult,
     ResolveMapContext,
+    Route,
     RouteNameOf,
     RouteNames,
+    RouteParamsFor,
+    RouteParamsForName,
+    RouteParamsOf,
     Router,
     RouterMap,
     Snapshot,
@@ -123,7 +132,7 @@ export declare function folder<const C extends Children>(
 export declare function createMap<const T extends Record<string, Node>>(
     data: T,
     options: { notFound: NotFoundHandler }
-): RouterMap<RouteNames<T>>;
+): RouterMap<RouteNames<T>, RouteParamsFor<T>>;
 
 /**
  * Brand check for a `file` node.
@@ -240,3 +249,12 @@ export declare function createRouter<S = any, R extends RouterMap = RouterMap>(
  * @public
  */
 export declare function isRouter(x: unknown): x is Router;
+
+/**
+ * Brand check for a `Route`. The only supported way to detect one at
+ * runtime — `instanceof` will not work, and structural lookalikes
+ * return `false`.
+ *
+ * @public
+ */
+export declare function isRoute(x: unknown): x is Route;

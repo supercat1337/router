@@ -31,13 +31,132 @@ options?: AttachPreloadOptions
 
 // @public
 export interface AttachPreloadOptions {
-    // Warning: (ae-forgotten-export) The symbol "Node_2" needs to be exported by the entry point links.d.ts
     preload?: (leaf: Node_2, ctx: PreloadContext) => void | Promise<unknown>;
 }
 
 // @public
+export type Children = Record<string, FileNode | FolderNode>;
+
+// @public
+export interface FileMeta {
+    [key: string]: any;
+    layout?: string;
+    load?: () => Promise<unknown>;
+    name: string;
+    preload?: (ctx: PreloadContext) => void | Promise<unknown>;
+    title?: string;
+}
+
+// @public
+export interface FileNode<M = FileMeta> {
+    readonly [FILE_BRAND]: true;
+    readonly [key: string]: any;
+    readonly layout?: string;
+    readonly name: string;
+    readonly title?: string;
+}
+
+// @public
+export interface FolderNode<O = FolderOptions, C = Children> {
+    readonly [FOLDER_BRAND]: true;
+    readonly children: Readonly<C>;
+    readonly notFound?: NotFoundHandler;
+}
+
+// @public
+export interface FolderOptions {
+    [key: string]: any;
+    notFound?: NotFoundHandler;
+}
+
+// @public
+export type MatchResult = {
+    status: 'matched';
+    chain: Node_2[];
+    params: Record<string, string>;
+    search: Record<string, string>;
+    url: string;
+} | {
+    status: 'notFound';
+    chain: Node_2[];
+    partialParams: Record<string, string>;
+    search: Record<string, string>;
+    handler: NotFoundHandler;
+    url: string;
+};
+
+// @public
+export type NavigationErrorType = 'invalid-rru' | 'resolver-null' | 'resolver-promise' | 'resolver-throw' | 'resolver-invalid' | 'notFound-promise' | 'notFound-throw' | 'redirect-loop';
+
+// @public
+type NavigationType_2 = 'initial' | 'push' | 'replace' | 'pop' | 'revalidate';
+export { NavigationType_2 as NavigationType }
+
+// @public
+type Node_2 = FileNode | FolderNode;
+export { Node_2 as Node }
+
+// @public
+export interface NotFoundContext {
+    readonly chain: readonly Node_2[];
+    readonly partialParams: Readonly<Record<string, string>>;
+    readonly search: Readonly<Record<string, string>>;
+    readonly url: string;
+}
+
+// @public
+export type NotFoundHandler = (ctx: NotFoundContext) => NotFoundResult;
+
+// @public
+export type NotFoundResult = unknown;
+
+// @public
+export type ParamsArgs<P extends Record<string, string>> = string extends keyof P ? [params?: Record<string, string>] : [keyof P] extends [never] ? [params?: Record<string, string>] : [params: P];
+
+// @public
 export interface PreloadContext {
     readonly signal: AbortSignal;
+}
+
+// @public
+export interface Route<N extends string = string, P extends Record<string, string> = Record<string, string>> {
+    readonly name: N;
+    readonly params: readonly (keyof P & string)[];
+    url(...args: ParamsArgs<P>): string;
+}
+
+// @public
+export type RouteParamsOf<R, N extends string> = R extends RouterMap<any, infer P> ? N extends keyof P ? P[N] : Record<string, string> : Record<string, string>;
+
+// @public
+export interface RouterMap<RouteName extends string = string, ParamsMap extends Record<string, Record<string, string>> = Record<string, Record<string, string>>> {
+    match(url: string): MatchResult;
+    readonly notFound: NotFoundHandler;
+    route<N extends RouteName>(name: N): Route<N, RouteParamsOf<this, N>>;
+    url<N extends RouteName>(name: N, ...args: ParamsArgs<RouteParamsOf<this, N>>): string;
+}
+
+// @public
+export interface Snapshot {
+    readonly chain: readonly Node_2[];
+    readonly error?: {
+        readonly type: NavigationErrorType;
+        readonly error: unknown;
+        readonly attemptedUrl: string;
+        readonly path?: readonly string[];
+        readonly partialChain: readonly Node_2[];
+        readonly partialParams: Readonly<Record<string, string>>;
+    };
+    readonly leaf: Node_2 | undefined;
+    readonly map: RouterMap;
+    readonly navigationId: number;
+    readonly navigationType: NavigationType_2;
+    readonly notFoundResult?: unknown;
+    readonly params: Readonly<Record<string, string>>;
+    readonly partialParams: Readonly<Record<string, string>>;
+    readonly search: Readonly<Record<string, string>>;
+    readonly status: 'matched' | 'notFound' | 'error';
+    readonly url: string;
 }
 
 // @public
@@ -48,9 +167,5 @@ export interface UrlAdapter {
     read(): string;
     write(url: string, mode: 'push' | 'replace'): void;
 }
-
-// Warnings were encountered during analysis:
-//
-// dist/types-temp/src/links.d.ts:57:9 - (ae-forgotten-export) The symbol "Snapshot" needs to be exported by the entry point links.d.ts
 
 ```

@@ -158,6 +158,84 @@ export type RouteNames<Data> = {
  */
 export type RouteNameOf<R> = R extends RouterMap<infer N> ? N : string;
 
+/**
+ * Extract the param name from a `:name` key.
+ * `':id'` → `'id'`; anything else → `never`.
+ *
+ * @public
+ */
+export type ParamNameOf<K> = K extends `:${infer P}` ? P : never;
+
+/**
+ * Per-route params for a single named route, extracted from the tree.
+ *
+ * Walks `Data` recursively, accumulating `:name` keys along the path to
+ * the leaf whose `FileMeta.name` is `Name`. Returns the accumulated
+ * params object or `never` when no such leaf exists in this subtree.
+ *
+ * @public
+ */
+export type RouteParamsForName<Data, Name, Acc extends Record<string, string> = {}> = {
+    [K in keyof Data & string]: Data[K] extends FileNode<infer M>
+        ? M extends { name: infer N extends string }
+            ? N extends Name
+                ? K extends `:${infer P}`
+                    ? Acc & { [Key in P]: string }
+                    : Acc
+                : never
+            : never
+        : Data[K] extends FolderNode<any, infer C>
+          ? K extends `:${infer P}`
+              ? RouteParamsForName<C, Name, Acc & { [Key in P]: string }>
+              : RouteParamsForName<C, Name, Acc>
+          : never;
+}[keyof Data & string];
+
+/**
+ * Collect per-route params from a `createMap` data literal.
+ *
+ * `{ login: file({ name: 'login' }), users: folder({ ':id': file({ name: 'user' }) }) }`
+ * → `{ login: {}, user: { id: string } }`.
+ *
+ * Wildcards (`*`) are skipped — they have no canonical URL.
+ *
+ * @public
+ */
+export type RouteParamsFor<Data> = {
+    [N in RouteNames<Data>]: RouteParamsForName<Data, N>;
+};
+
+/**
+ * Extract params for a specific route name from a `RouterMap`.
+ * Falls back to `Record<string, string>` for hand-built / unparameterized maps.
+ *
+ * @public
+ */
+export type RouteParamsOf<R, N extends string> =
+    R extends RouterMap<any, infer P>
+        ? N extends keyof P
+            ? P[N]
+            : Record<string, string>
+        : Record<string, string>;
+
+/**
+ * Argument tuple for `url(...)` and `Route.url(...)`.
+ *
+ * - `Record<string, string>` (unparameterized map, fallback): `[params?]` — optional.
+ * - `{}` (route without `:name`): `[params?]` — optional.
+ * - `{ id: string }` (route with params): `[params]` — **required**.
+ *
+ * Rest-of-single-tuple is used so callers can spread `...args` without
+ * a `[] | [P]` union — TS treats this as "0 or 1 argument" cleanly.
+ *
+ * @public
+ */
+export type ParamsArgs<P extends Record<string, string>> = string extends keyof P
+    ? [params?: Record<string, string>]
+    : [keyof P] extends [never]
+      ? [params?: Record<string, string>]
+      : [params: P];
+
 // =============================================================================
 // NotFound, redirect
 // =============================================================================
@@ -226,17 +304,36 @@ export interface RedirectResult {
  *
  * @public
  */
-export interface RouterMap<RouteName extends string = string> {
-    /** Global fallback handler for URLs that match nothing in this map. */
+export interface RouterMap<
+    RouteName extends string = string,
+    ParamsMap extends Record<string, Record<string, string>> = Record<
+        string,
+        Record<string, string>
+    >,
+> {
+    /**
+     * Global fallback handler for URLs that match nothing in this map.
+     * Used when no folder along the partial chain provides its own
+     * `notFound`.
+     */
     readonly notFound: NotFoundHandler;
 
     /**
      * Build a canonical RRU for a named route.
      *
-     * @throws {TypeError} when `name` is unknown, a `:name` param is missing
-     *   or invalid, or the route is a `*` wildcard.
+     * @throws {TypeError} when `name` is unknown, a `:name` param is
+     *   missing or invalid, or the route is a `*` wildcard.
      */
-    url(name: RouteName, params?: Record<string, string>): string;
+    url<N extends RouteName>(name: N, ...args: ParamsArgs<RouteParamsOf<this, N>>): string;
+
+    /**
+     * Handle to a named route. Cached — the same object is returned for
+     * repeated calls with the same name.
+     *
+     * @throws {TypeError} when `name` is unknown or the route is a `*`
+     *   wildcard.
+     */
+    route<N extends RouteName>(name: N): Route<N, RouteParamsOf<this, N>>;
 
     /**
      * Match a **normalized** RRU against this map. Caller must call
@@ -244,6 +341,40 @@ export interface RouterMap<RouteName extends string = string> {
      * undefined.
      */
     match(url: string): MatchResult;
+}
+
+/**
+ * A handle to a single named route inside a `RouterMap`.
+ *
+ * `Route` is immutable, branded (`isRoute`), and cached per `RouterMap` —
+ * `map.route(name) === map.route(name)`.
+ *
+ * **Do not store a `Route` across map boundaries.** When the active map
+ * changes (auth, tenant, feature flag), routes of the previous map may
+ * not exist in the new one — call `router.route(name)` again to get a
+ * handle bound to the current map.
+ *
+ * @public
+ */
+export interface Route<
+    N extends string = string,
+    P extends Record<string, string> = Record<string, string>,
+> {
+    /** Route name; the key used by `RouterMap.url(name)`. */
+    readonly name: N;
+
+    /**
+     * `:name` parameter keys extracted from the tree, in path order.
+     * Empty for routes without params.
+     */
+    readonly params: readonly (keyof P & string)[];
+
+    /**
+     * Build the canonical RRU for this route.
+     *
+     * @throws {TypeError} when a `:name` param is missing or invalid.
+     */
+    url(...args: ParamsArgs<P>): string;
 }
 
 /**
@@ -533,8 +664,16 @@ export interface Router<S = any, R extends RouterMap = RouterMap> {
     /** History forward (delegates to `history.forward`). */
     forward(): void;
 
-    /** Delegates to the active map's `url`. */
-    url(name: RouteNameOf<R>, params?: Record<string, string>): string;
+    /**
+     * Delegates to the active map's `url`. Params are typed per route.
+     */
+    url<N extends RouteNameOf<R>>(name: N, ...args: ParamsArgs<RouteParamsOf<R, N>>): string;
+
+    /**
+     * Delegates to the active map's `route`. Handle is bound to the
+     * **current** map — re-fetch after a map change.
+     */
+    route<N extends RouteNameOf<R>>(name: N): Route<N, RouteParamsOf<R, N>>;
 
     /** The most recently committed snapshot. */
     getSnapshot(): Snapshot;

@@ -48,7 +48,7 @@ export interface CreateGuardLayerOptions {
 export function createMap<const T extends Record<string, Node_2>>(
 data: T,
 options: { notFound: NotFoundHandler }
-): RouterMap<RouteNames<T>>;
+): RouterMap<RouteNames<T>, RouteParamsFor<T>>;
 
 // @public
 export function createRouter<S = any, R extends RouterMap = RouterMap>(
@@ -222,6 +222,9 @@ export function isMap(x: unknown): x is RouterMap;
 export function isRedirect(x: unknown): x is RedirectResult;
 
 // @public
+export function isRoute(x: unknown): x is Route;
+
+// @public
 export function isRouter(x: unknown): x is Router;
 
 // @public
@@ -301,6 +304,12 @@ export type OnListenerError = (err: unknown, info: {
 }) => void;
 
 // @public
+export type ParamNameOf<K> = K extends `:${infer P}` ? P : never;
+
+// @public
+export type ParamsArgs<P extends Record<string, string>> = string extends keyof P ? [params?: Record<string, string>] : [keyof P] extends [never] ? [params?: Record<string, string>] : [params: P];
+
+// @public
 export interface PreloadContext {
     readonly signal: AbortSignal;
 }
@@ -321,6 +330,13 @@ export interface ResolveMapContext<S = any> {
 }
 
 // @public
+export interface Route<N extends string = string, P extends Record<string, string> = Record<string, string>> {
+    readonly name: N;
+    readonly params: readonly (keyof P & string)[];
+    url(...args: ParamsArgs<P>): string;
+}
+
+// @public
 export type RouteNameOf<R> = R extends RouterMap<infer N> ? N : string;
 
 // @public
@@ -329,6 +345,25 @@ export type RouteNames<Data> = {
         name: infer N;
     } ? N extends string ? N : never : never : Data[K] extends FolderNode<any, infer C> ? RouteNames<C> : never;
 }[keyof Data];
+
+// @public
+export type RouteParamsFor<Data> = {
+    [N in RouteNames<Data>]: RouteParamsForName<Data, N>;
+};
+
+// @public
+export type RouteParamsForName<Data, Name, Acc extends Record<string, string> = {}> = {
+    [K in keyof Data & string]: Data[K] extends FileNode<infer M> ? M extends {
+        name: infer N extends string;
+    } ? N extends Name ? K extends `:${infer P}` ? Acc & {
+        [Key in P]: string;
+    } : Acc : never : never : Data[K] extends FolderNode<any, infer C> ? K extends `:${infer P}` ? RouteParamsForName<C, Name, Acc & {
+        [Key in P]: string;
+    }> : RouteParamsForName<C, Name, Acc> : never;
+}[keyof Data & string];
+
+// @public
+export type RouteParamsOf<R, N extends string> = R extends RouterMap<any, infer P> ? N extends keyof P ? P[N] : Record<string, string> : Record<string, string>;
 
 // @public
 export interface Router<S = any, R extends RouterMap = RouterMap> {
@@ -344,15 +379,17 @@ export interface Router<S = any, R extends RouterMap = RouterMap> {
     once<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void): () => void;
     replace(url: string): Snapshot;
     revalidate(): Snapshot;
+    route<N extends RouteNameOf<R>>(name: N): Route<N, RouteParamsOf<R, N>>;
     subscribe(listener: (snapshot: Snapshot) => void): () => void;
-    url(name: RouteNameOf<R>, params?: Record<string, string>): string;
+    url<N extends RouteNameOf<R>>(name: N, ...args: ParamsArgs<RouteParamsOf<R, N>>): string;
 }
 
 // @public
-export interface RouterMap<RouteName extends string = string> {
+export interface RouterMap<RouteName extends string = string, ParamsMap extends Record<string, Record<string, string>> = Record<string, Record<string, string>>> {
     match(url: string): MatchResult;
     readonly notFound: NotFoundHandler;
-    url(name: RouteName, params?: Record<string, string>): string;
+    route<N extends RouteName>(name: N): Route<N, RouteParamsOf<this, N>>;
+    url<N extends RouteName>(name: N, ...args: ParamsArgs<RouteParamsOf<this, N>>): string;
 }
 
 // @public

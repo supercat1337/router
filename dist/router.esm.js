@@ -27,6 +27,9 @@ const REDIRECT_BRAND = Symbol('spa-router.redirect');
 /** @type {unique symbol} */
 const ROUTER_BRAND = Symbol('spa-router.router');
 
+/** @type {unique symbol} */
+const ROUTE_BRAND = Symbol('spa-router.route');
+
 // @ts-check
 
 
@@ -539,11 +542,58 @@ function buildUrlImpl(children, name, params, pathSoFar) {
 
 
 /**
+ * @typedef {import('./types.js').Route} Route
+ */
+
+/**
+ * Create a branded, frozen `Route` handle.
+ *
+ * @internal
+ * @param {{
+ *   name: string,
+ *   params: readonly string[],
+ *   buildUrl: (params: Record<string, string> | undefined) => string,
+ * }} config
+ * @returns {Route}
+ */
+function createRoute({ name, params, buildUrl }) {
+    return /** @type {Route} */ (
+        Object.freeze(
+            /** @type {any} */ ({
+                name,
+                params: Object.freeze([...params]),
+                url(/** @type {Record<string, string> | undefined} */ p) {
+                    return buildUrl(p);
+                },
+                [ROUTE_BRAND]: true,
+            })
+        )
+    );
+}
+
+/**
+ * Brand check for a `Route`. The only supported way to detect one at
+ * runtime — `instanceof` will not work, and structural lookalikes
+ * return `false`.
+ *
+ * @public
+ * @param {unknown} x
+ * @returns {x is Route}
+ */
+function isRoute(x) {
+    return x !== null && typeof x === 'object' && /** @type {any} */ (x)[ROUTE_BRAND] === true;
+}
+
+// @ts-check
+
+
+/**
  * @typedef {import('./types.js').RouterMap} RouterMap
  * @typedef {import('./types.js').MapValidationErrorCode} MapValidationErrorCode
  * @typedef {import('./types.js').NotFoundHandler} NotFoundHandler
  * @typedef {import('./types.js').Node} Node
  * @typedef {import('./types.js').Children} Children
+ * @typedef {import('./types.js').Route} Route
  */
 
 /**
@@ -632,7 +682,12 @@ function createMap(data, options) {
     const seenNames = new Set();
     /** @type {WeakMap<Node, string>} */
     const keyMap = new WeakMap();
-    collectTree(/** @type {Children} */ (data), '', seenNames, keyMap);
+    /** @type {Map<string, readonly string[]>} */
+    const leafParams = new Map();
+    collectTree(/** @type {Children} */ (data), '', seenNames, keyMap, leafParams, []);
+
+    /** @type {Map<string, Route>} */
+    const routeCache = new Map();
 
     const notFound = options.notFound;
     const rootChildren = /** @type {Children} */ (data);
@@ -640,8 +695,28 @@ function createMap(data, options) {
     /** @type {RouterMap} */
     const map = {
         notFound,
-        url(name, params) {
-            return buildUrl(rootChildren, name, params);
+        /**
+         * @param {string} name
+         * @param {...any} args
+         * @returns {string}
+         */
+        url(name, ...args) {
+            return buildUrl(rootChildren, name, args[0]);
+        },
+        route(/** @type {string} */ name) {
+            const cached = routeCache.get(name);
+            if (cached) return /** @type {any} */ (cached);
+            const params = leafParams.get(name);
+            if (params === undefined) {
+                throw new TypeError(`route(): route ${JSON.stringify(name)} not found in this map`);
+            }
+            const r = createRoute({
+                name,
+                params,
+                buildUrl: p => buildUrl(rootChildren, name, p),
+            });
+            routeCache.set(name, r);
+            return /** @type {any} */ (r);
         },
         match(url) {
             return match(rootChildren, url, notFound);
@@ -666,15 +741,18 @@ function isMap(x) {
 }
 
 /**
- * Walk the tree for node construction and name uniqueness.
+ * Walk the tree for node construction, name uniqueness, and `:name`
+ * accumulation along the path to each leaf.
  *
  * @param {Children} children
  * @param {string} pathPrefix
  * @param {Set<string>} seenNames
  * @param {WeakMap<Node, string>} keyMap
+ * @param {Map<string, readonly string[]>} leafParams
+ * @param {readonly string[]} parentParams
  * @returns {void}
  */
-function collectTree(children, pathPrefix, seenNames, keyMap) {
+function collectTree(children, pathPrefix, seenNames, keyMap, leafParams, parentParams) {
     for (const key of Object.keys(children)) {
         const childPath = pathPrefix + '/' + key;
         const child = children[key];
@@ -682,14 +760,21 @@ function collectTree(children, pathPrefix, seenNames, keyMap) {
             throw new MapValidationError('node-not-constructed', childPath);
         }
         keyMap.set(child, key);
+        const childParams = key.startsWith(':') ? [...parentParams, key.slice(1)] : parentParams;
         if (isFile(child)) {
             if (seenNames.has(child.name)) {
                 throw new MapValidationError('name-duplicate', childPath);
             }
             seenNames.add(child.name);
+            // Wildcard (`*`) has no canonical URL — `url()` / `route()` /
+            // `hasRoute()` all reject it, matching `buildUrlImpl` and
+            // `hasRouteImpl`. Do not register it in `leafParams`.
+            if (key !== '*') {
+                leafParams.set(child.name, Object.freeze(childParams));
+            }
         }
         if (isFolder(child)) {
-            collectTree(child.children, childPath, seenNames, keyMap);
+            collectTree(child.children, childPath, seenNames, keyMap, leafParams, childParams);
         }
     }
 }
@@ -1587,14 +1672,31 @@ function createRouter(options) {
 
     /**
      * @param {string} name
-     * @param {Record<string, string>} [params]
+     * @param {...any} args
+     * @returns {string}
      */
-    function url(name, params) {
+    function url(name, ...args) {
         /* c8 ignore next 3 -- unreachable: createRouter commits initial before returning */
         if (!currentSnapshot) {
             throw new TypeError('url(): no committed snapshot');
         }
-        return currentSnapshot.map.url(name, params);
+        // ParamsArgs<P> is a single-element tuple at runtime; spread is fine.
+        return currentSnapshot.map.url(
+            name,
+            .../** @type {[params?: Record<string, string>]} */ (args)
+        );
+    }
+
+    /**
+     * @param {string} name
+     * @returns {any}
+     */
+    function route(name) {
+        /* c8 ignore next 3 -- unreachable: createRouter commits initial before returning */
+        if (!currentSnapshot) {
+            throw new TypeError('route(): no committed snapshot');
+        }
+        return /** @type {any} */ (currentSnapshot.map.route(name));
     }
 
     /**
@@ -1712,6 +1814,7 @@ function createRouter(options) {
             if (typeof history !== 'undefined') history.forward();
         },
         url,
+        route,
         getSnapshot() {
             return /** @type {Snapshot} */ (currentSnapshot);
         },
@@ -1768,4 +1871,4 @@ function isRouter(x) {
     return x !== null && typeof x === 'object' && /** @type {any} */ (x)[ROUTER_BRAND] === true;
 }
 
-export { MapValidationError, createMap, createRouter, file, folder, hasRoute, isFile, isFolder, isMap, isRedirect, isRouter, normalizeRRU, redirect };
+export { MapValidationError, createMap, createRouter, file, folder, hasRoute, isFile, isFolder, isMap, isRedirect, isRoute, isRouter, normalizeRRU, redirect };

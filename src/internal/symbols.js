@@ -24,3 +24,6 @@ export const REDIRECT_BRAND = Symbol('spa-router.redirect');
 
 /** @type {unique symbol} */
 export const ROUTER_BRAND = Symbol('spa-router.router');
+
+/** @type {unique symbol} */
+export const ROUTE_BRAND = Symbol('spa-router.route');

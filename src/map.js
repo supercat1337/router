@@ -3,6 +3,7 @@
 import { isFile, isFolder, parseKey } from './data-model.js';
 import { MAP_BRAND } from './internal/symbols.js';
 import { buildUrl, match } from './matching.js';
+import { createRoute } from './route.js';
 
 /**
  * @typedef {import('./types.js').RouterMap} RouterMap
@@ -10,6 +11,7 @@ import { buildUrl, match } from './matching.js';
  * @typedef {import('./types.js').NotFoundHandler} NotFoundHandler
  * @typedef {import('./types.js').Node} Node
  * @typedef {import('./types.js').Children} Children
+ * @typedef {import('./types.js').Route} Route
  */
 
 /**
@@ -98,7 +100,12 @@ export function createMap(data, options) {
     const seenNames = new Set();
     /** @type {WeakMap<Node, string>} */
     const keyMap = new WeakMap();
-    collectTree(/** @type {Children} */ (data), '', seenNames, keyMap);
+    /** @type {Map<string, readonly string[]>} */
+    const leafParams = new Map();
+    collectTree(/** @type {Children} */ (data), '', seenNames, keyMap, leafParams, []);
+
+    /** @type {Map<string, Route>} */
+    const routeCache = new Map();
 
     const notFound = options.notFound;
     const rootChildren = /** @type {Children} */ (data);
@@ -106,8 +113,28 @@ export function createMap(data, options) {
     /** @type {RouterMap} */
     const map = {
         notFound,
-        url(name, params) {
-            return buildUrl(rootChildren, name, params);
+        /**
+         * @param {string} name
+         * @param {...any} args
+         * @returns {string}
+         */
+        url(name, ...args) {
+            return buildUrl(rootChildren, name, args[0]);
+        },
+        route(/** @type {string} */ name) {
+            const cached = routeCache.get(name);
+            if (cached) return /** @type {any} */ (cached);
+            const params = leafParams.get(name);
+            if (params === undefined) {
+                throw new TypeError(`route(): route ${JSON.stringify(name)} not found in this map`);
+            }
+            const r = createRoute({
+                name,
+                params,
+                buildUrl: p => buildUrl(rootChildren, name, p),
+            });
+            routeCache.set(name, r);
+            return /** @type {any} */ (r);
         },
         match(url) {
             return match(rootChildren, url, notFound);
@@ -132,15 +159,18 @@ export function isMap(x) {
 }
 
 /**
- * Walk the tree for node construction and name uniqueness.
+ * Walk the tree for node construction, name uniqueness, and `:name`
+ * accumulation along the path to each leaf.
  *
  * @param {Children} children
  * @param {string} pathPrefix
  * @param {Set<string>} seenNames
  * @param {WeakMap<Node, string>} keyMap
+ * @param {Map<string, readonly string[]>} leafParams
+ * @param {readonly string[]} parentParams
  * @returns {void}
  */
-function collectTree(children, pathPrefix, seenNames, keyMap) {
+function collectTree(children, pathPrefix, seenNames, keyMap, leafParams, parentParams) {
     for (const key of Object.keys(children)) {
         const childPath = pathPrefix + '/' + key;
         const child = children[key];
@@ -148,14 +178,21 @@ function collectTree(children, pathPrefix, seenNames, keyMap) {
             throw new MapValidationError('node-not-constructed', childPath);
         }
         keyMap.set(child, key);
+        const childParams = key.startsWith(':') ? [...parentParams, key.slice(1)] : parentParams;
         if (isFile(child)) {
             if (seenNames.has(child.name)) {
                 throw new MapValidationError('name-duplicate', childPath);
             }
             seenNames.add(child.name);
+            // Wildcard (`*`) has no canonical URL — `url()` / `route()` /
+            // `hasRoute()` all reject it, matching `buildUrlImpl` and
+            // `hasRouteImpl`. Do not register it in `leafParams`.
+            if (key !== '*') {
+                leafParams.set(child.name, Object.freeze(childParams));
+            }
         }
         if (isFolder(child)) {
-            collectTree(child.children, childPath, seenNames, keyMap);
+            collectTree(child.children, childPath, seenNames, keyMap, leafParams, childParams);
         }
     }
 }
