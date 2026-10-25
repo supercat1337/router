@@ -25,6 +25,7 @@ test('maxRedirects: 0 → immediate redirect-loop', t => {
     const snap = router.navigate('/missing');
     t.is(snap.status, 'error');
     t.is(snap.error?.type, 'redirect-loop');
+    t.is(snap.navigationType, 'push');
 });
 
 test('redirect cycle through normalized trailing slash', t => {
@@ -45,13 +46,14 @@ test('redirect cycle through normalized trailing slash', t => {
     const snap = router.navigate('/a');
     t.is(snap.status, 'error');
     t.is(snap.error?.type, 'redirect-loop');
+    t.is(snap.navigationType, 'push');
 });
 
 test('popstate during transaction is suppressed', t => {
     const map = createMap(
         {
             login: file({ name: 'login' }),
-            users: folder( { ':id': file({ name: 'u' }) }),
+            users: folder({ ':id': file({ name: 'u' }) }),
         },
         { notFound: nf }
     );

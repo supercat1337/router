@@ -34,11 +34,13 @@ test('chainParams: matched uses params', t => {
     const map = createMap({}, { notFound: nf });
     const snap = {
         navigationId: 1,
+        navigationType: /** @type {'initial'} */ ('initial'),
         map,
         status: /** @type {'matched'} */ ('matched'),
         chain: [],
         params: { id: '5' },
         partialParams: {},
+        search: {},
         url: '/',
         leaf: undefined,
     };
@@ -49,11 +51,13 @@ test('chainParams: notFound uses partialParams', t => {
     const map = createMap({}, { notFound: nf });
     const snap = {
         navigationId: 1,
+        navigationType: /** @type {'initial'} */ ('initial'),
         map,
         status: /** @type {'notFound'} */ ('notFound'),
         chain: [],
         params: {},
         partialParams: { id: '5' },
+        search: {},
         url: '/',
         leaf: undefined,
     };
@@ -61,19 +65,18 @@ test('chainParams: notFound uses partialParams', t => {
 });
 
 test('urlPrefixes: literal chain', t => {
-    const map = createMap(
-        { users: folder( { profile: file({ name: 'p' }) }) },
-        { notFound: nf }
-    );
+    const map = createMap({ users: folder({ profile: file({ name: 'p' }) }) }, { notFound: nf });
     const r = map.match('/users/profile');
     if (r.status !== 'matched') return t.fail();
     const snap = {
         navigationId: 1,
+        navigationType: /** @type {'push'} */ ('push'),
         map,
         status: /** @type {'matched'} */ ('matched'),
         chain: r.chain,
         params: r.params,
         partialParams: {},
+        search: {},
         url: '/users/profile',
         leaf: leafOf(r.chain),
     };
@@ -81,16 +84,18 @@ test('urlPrefixes: literal chain', t => {
 });
 
 test('urlPrefixes: :name decoded', t => {
-    const map = createMap({ users: folder( { ':id': file({ name: 'u' }) }) }, { notFound: nf });
+    const map = createMap({ users: folder({ ':id': file({ name: 'u' }) }) }, { notFound: nf });
     const r = map.match('/users/%35');
     if (r.status !== 'matched') return t.fail();
     const snap = {
         navigationId: 1,
+        navigationType: /** @type {'push'} */ ('push'),
         map,
         status: /** @type {'matched'} */ ('matched'),
         chain: r.chain,
         params: r.params,
         partialParams: {},
+        search: {},
         url: '/users/%35',
         leaf: leafOf(r.chain),
     };
@@ -103,11 +108,13 @@ test('urlPrefixes: * uses full encoded pathname (no query)', t => {
     if (r.status !== 'matched') return t.fail();
     const snap = {
         navigationId: 1,
+        navigationType: /** @type {'push'} */ ('push'),
         map,
         status: /** @type {'matched'} */ ('matched'),
         chain: r.chain,
         params: r.params,
         partialParams: {},
+        search: {},
         url: '/foo%20bar',
         leaf: leafOf(r.chain),
     };
@@ -120,11 +127,13 @@ test('urlPrefixes: * strips query', t => {
     if (r.status !== 'matched') return t.fail();
     const snap = {
         navigationId: 1,
+        navigationType: /** @type {'push'} */ ('push'),
         map,
         status: /** @type {'matched'} */ ('matched'),
         chain: r.chain,
         params: r.params,
         partialParams: {},
+        search: {},
         url: '/foo?tab=1',
         leaf: leafOf(r.chain),
     };
@@ -133,18 +142,20 @@ test('urlPrefixes: * strips query', t => {
 
 test('urlPrefixes: index = parent prefix', t => {
     const map = createMap(
-        { admin: folder( { index: file({ name: 'adminHome' }) }) },
+        { admin: folder({ index: file({ name: 'adminHome' }) }) },
         { notFound: nf }
     );
     const r = map.match('/admin');
     if (r.status !== 'matched') return t.fail();
     const snap = {
         navigationId: 1,
+        navigationType: /** @type {'push'} */ ('push'),
         map,
         status: /** @type {'matched'} */ ('matched'),
         chain: r.chain,
         params: r.params,
         partialParams: {},
+        search: {},
         url: '/admin',
         leaf: leafOf(r.chain),
     };
@@ -156,11 +167,13 @@ test('urlPrefixes: node not in keysMap → parent prefix', t => {
     const map = createMap({}, { notFound: nf });
     const snap = {
         navigationId: 1,
+        navigationType: /** @type {'push'} */ ('push'),
         map,
         status: /** @type {'matched'} */ ('matched'),
         chain: [fakeNode],
         params: {},
         partialParams: {},
+        search: {},
         url: '/x',
         leaf: fakeNode,
     };
@@ -168,27 +181,31 @@ test('urlPrefixes: node not in keysMap → parent prefix', t => {
 });
 
 test('commonChainPrefix: shared root', t => {
-    const map = createMap({ users: folder( { ':id': file({ name: 'u' }) }) }, { notFound: nf });
+    const map = createMap({ users: folder({ ':id': file({ name: 'u' }) }) }, { notFound: nf });
     const r1 = map.match('/users/5');
     const r2 = map.match('/users/6');
     if (r1.status !== 'matched' || r2.status !== 'matched') return t.fail();
     const prev = {
         navigationId: 1,
+        navigationType: /** @type {'push'} */ ('push'),
         map,
         status: /** @type {'matched'} */ ('matched'),
         chain: r1.chain,
         params: r1.params,
         partialParams: {},
+        search: {},
         url: '/users/5',
         leaf: leafOf(r1.chain),
     };
     const next = {
         navigationId: 2,
+        navigationType: /** @type {'push'} */ ('push'),
         map,
         status: /** @type {'matched'} */ ('matched'),
         chain: r2.chain,
         params: r2.params,
         partialParams: {},
+        search: {},
         url: '/users/6',
         leaf: leafOf(r2.chain),
     };
@@ -197,14 +214,16 @@ test('commonChainPrefix: shared root', t => {
 
 test('buildSnapshot: notFound attaches notFoundResult', t => {
     const map = createMap({}, { notFound: nf });
-    const snap = buildSnapshot(1, map, 'notFound', [], {}, {}, '/x', {}, 'render');
+    const snap = buildSnapshot(1, map, 'notFound', [], {}, {}, '/x', {}, 'push', 'render');
     t.is(snap.notFoundResult, 'render');
+    t.is(snap.navigationType, 'push');
 });
 
 test('buildSnapshot: matched skips notFoundResult', t => {
     const map = createMap({}, { notFound: nf });
-    const snap = buildSnapshot(1, map, 'matched', [], {}, {}, '/x', {});
+    const snap = buildSnapshot(1, map, 'matched', [], {}, {}, '/x', {}, 'initial');
     t.is(snap.notFoundResult, undefined);
+    t.is(snap.navigationType, 'initial');
 });
 
 test('buildErrorSnapshot: anchored to prev', t => {
@@ -213,6 +232,7 @@ test('buildErrorSnapshot: anchored to prev', t => {
     if (r.status !== 'matched') return t.fail();
     const prev = {
         navigationId: 1,
+        navigationType: /** @type {'push'} */ ('push'),
         map,
         status: /** @type {'matched'} */ ('matched'),
         chain: r.chain,
@@ -232,7 +252,8 @@ test('buildErrorSnapshot: anchored to prev', t => {
             partialChain: [],
             partialParams: {},
         },
-        '/login'
+        '/login',
+        'replace'
     );
     t.is(err.status, 'error');
     t.is(err.map, map);
@@ -240,4 +261,5 @@ test('buildErrorSnapshot: anchored to prev', t => {
     t.deepEqual(err.params, {});
     t.deepEqual(err.partialParams, prev.params);
     t.deepEqual(err.search, { tab: '1' });
+    t.is(err.navigationType, 'replace');
 });

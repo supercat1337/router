@@ -32,7 +32,12 @@ options?: AttachPreloadOptions
 // @public
 export interface AttachPreloadOptions {
     // Warning: (ae-forgotten-export) The symbol "Node_2" needs to be exported by the entry point links.d.ts
-    preload?: (leaf: Node_2) => void | Promise<unknown>;
+    preload?: (leaf: Node_2, ctx: PreloadContext) => void | Promise<unknown>;
+}
+
+// @public
+export interface PreloadContext {
+    readonly signal: AbortSignal;
 }
 
 // @public
@@ -46,6 +51,6 @@ export interface UrlAdapter {
 
 // Warnings were encountered during analysis:
 //
-// dist/types-temp/src/links.d.ts:50:9 - (ae-forgotten-export) The symbol "Snapshot" needs to be exported by the entry point links.d.ts
+// dist/types-temp/src/links.d.ts:57:9 - (ae-forgotten-export) The symbol "Snapshot" needs to be exported by the entry point links.d.ts
 
 ```

@@ -80,6 +80,9 @@ export function installDom(opts = {}) {
         if (i >= 0) arr.splice(i, 1);
     }
 
+    /** @type {any[]} */
+    const registeredElements = [];
+
     const doc = {
         /** @param {string} sel */
         querySelector(sel) {
@@ -87,6 +90,10 @@ export function installDom(opts = {}) {
                 return { href: opts.baseHref };
             }
             return null;
+        },
+        /** @param {string} sel */
+        querySelectorAll(sel) {
+            return registeredElements.filter(el => el.matches(sel));
         },
         /** @param {string} type @param {Function} fn */
         addEventListener(type, fn) {
@@ -120,11 +127,18 @@ export function installDom(opts = {}) {
     g.document = doc;
 
     let done = false;
-    return {
+return {
         location: loc,
         historyCalls,
         listeners,
         navigateTo,
+        /** @param {any} el */
+        registerElement(el) {
+            registeredElements.push(el);
+        },
+        clearElements() {
+            registeredElements.length = 0;
+        },
         /**
          * @param {string} type
          * @param {object} [event]
@@ -157,6 +171,9 @@ export function installDom(opts = {}) {
  */
 export function makeElement(attrs) {
     /** @type {Record<string, string>} */
+    const store = {};
+    for (const key of Object.keys(attrs)) store[key] = String(attrs[key]);
+    /** @type {Record<string, string>} */
     const dataset = {};
     for (const key of Object.keys(attrs)) {
         if (key.startsWith('data-')) {
@@ -168,13 +185,19 @@ export function makeElement(attrs) {
     const el = {
         dataset,
         getAttribute(name) {
-            return name in attrs ? String(attrs[name]) : null;
+            return name in store ? store[name] : null;
+        },
+        setAttribute(name, value) {
+            store[name] = String(value);
+        },
+        removeAttribute(name) {
+            delete store[name];
         },
         hasAttribute(name) {
-            return name in attrs;
+            return name in store;
         },
         matches(sel) {
-            if (sel === '[data-router-link]') return 'data-router-link' in attrs;
+            if (sel === '[data-router-link]') return 'data-router-link' in store;
             return false;
         },
         closest(sel) {

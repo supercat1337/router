@@ -13,7 +13,7 @@ function basicMap() {
     return createMap(
         {
             login: file({ name: 'login' }),
-            profile: folder( { index: file({ name: 'profile' }) }),
+            profile: folder({ index: file({ name: 'profile' }) }),
         },
         { notFound: nf }
     );
@@ -34,6 +34,7 @@ test('initial commits a matched snapshot', t => {
     t.is(snap.navigationId, 1);
     t.is(snap.map, map);
     t.deepEqual(snap.search, {});
+    t.is(snap.navigationType, 'initial');
 });
 
 test('initial with unknown URL commits a notFound snapshot', t => {
@@ -49,6 +50,7 @@ test('initial with unknown URL commits a notFound snapshot', t => {
     t.is(snap.status, 'notFound');
     t.deepEqual(snap.chain, []);
     t.deepEqual(snap.search, {});
+    t.is(snap.navigationType, 'initial');
 });
 
 test('navigate pushes and increments navigationId', t => {
@@ -65,6 +67,7 @@ test('navigate pushes and increments navigationId', t => {
     t.is(snap.navigationId, 2);
     t.is(snap.url, '/profile');
     t.is(adapter.read(), '/profile');
+    t.is(snap.navigationType, 'push');
 });
 
 test('navigate(current) is no-op — same reference, no ID increment', t => {
@@ -102,6 +105,7 @@ test('navigate(current) after error is not a no-op', t => {
     const after = router.navigate('/login');
     t.is(after.status, 'matched');
     t.is(after.navigationId, beforeId + 1);
+    t.is(after.navigationType, 'push');
 });
 
 test('revalidate always increments ID even if nothing changed', t => {
@@ -116,6 +120,7 @@ test('revalidate always increments ID even if nothing changed', t => {
     const before = router.getSnapshot().navigationId;
     const snap = router.revalidate();
     t.is(snap.navigationId, before + 1);
+    t.is(snap.navigationType, 'revalidate');
 });
 
 test('error snapshot: map and chain from prev; params {}; partialParams from prev', t => {
@@ -140,6 +145,7 @@ test('error snapshot: map and chain from prev; params {}; partialParams from pre
     t.deepEqual(errSnap.error?.partialChain, []);
     t.deepEqual(errSnap.error?.partialParams, {});
     t.deepEqual(errSnap.search, {});
+    t.is(errSnap.navigationType, 'push');
 });
 
 test('dev mode: resolver-throw propagates', t => {
@@ -299,6 +305,66 @@ test('popstate commits new snapshot', t => {
     const snap = router.getSnapshot();
     t.is(snap.status, 'matched');
     t.is(snap.url, '/profile');
+    t.is(snap.navigationType, 'pop');
+});
+
+test('error snapshot: navigationType reflects attempted source (replace)', t => {
+    const map = basicMap();
+    const adapter = createMemoryAdapter('/login');
+    let throwing = false;
+    const router = createRouter({
+        resolveMap: () => {
+            if (throwing) throw new Error('boom');
+            return map;
+        },
+        getState: () => ({}),
+        adapter,
+        dev: false,
+    });
+    throwing = true;
+    const errSnap = router.replace('/profile');
+    t.is(errSnap.status, 'error');
+    t.is(errSnap.navigationType, 'replace');
+});
+
+test('error snapshot: navigationType reflects attempted source (popstate)', t => {
+    const map = basicMap();
+    const adapter = createMemoryAdapter('/login');
+    let throwing = false;
+    const router = createRouter({
+        resolveMap: () => {
+            if (throwing) throw new Error('boom');
+            return map;
+        },
+        getState: () => ({}),
+        adapter,
+        dev: false,
+    });
+    throwing = true;
+    adapter.setCurrent('/profile');
+    adapter.trigger();
+    const errSnap = router.getSnapshot();
+    t.is(errSnap.status, 'error');
+    t.is(errSnap.navigationType, 'pop');
+});
+
+test('error snapshot: navigationType reflects attempted source (navigate)', t => {
+    const map = basicMap();
+    const adapter = createMemoryAdapter('/login');
+    let throwing = false;
+    const router = createRouter({
+        resolveMap: () => {
+            if (throwing) throw new Error('boom');
+            return map;
+        },
+        getState: () => ({}),
+        adapter,
+        dev: false,
+    });
+    throwing = true;
+    const errSnap = router.navigate('/profile');
+    t.is(errSnap.status, 'error');
+    t.is(errSnap.navigationType, 'push');
 });
 
 test('replace: writes url to adapter when different from current', t => {
@@ -320,6 +386,7 @@ test('replace: writes url to adapter when different from current', t => {
     t.is(snap.status, 'matched');
     t.is(snap.url, '/profile');
     t.is(adapter.read(), '/profile');
+    t.is(snap.navigationType, 'replace');
 });
 
 test('navigate with query: snapshot.search reflects committed URL', t => {

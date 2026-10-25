@@ -1071,13 +1071,14 @@ function commonChainPrefix(prev, next, getKeysMap2) {
   }
   return n;
 }
-function buildSnapshot(navigationId, map, status, chain, params, partialParams, url, search, notFoundResult) {
+function buildSnapshot(navigationId, map, status, chain, params, partialParams, url, search, navigationType, notFoundResult) {
   const frozenChain = Object.freeze([...chain]);
   const frozenParams = Object.freeze({ ...params });
   const frozenPartialParams = Object.freeze({ ...partialParams });
   const frozenSearch = Object.freeze({ ...search });
   const snap = {
     navigationId,
+    navigationType,
     map,
     status,
     chain: frozenChain,
@@ -1093,7 +1094,7 @@ function buildSnapshot(navigationId, map, status, chain, params, partialParams, 
     Object.freeze(snap)
   );
 }
-function buildErrorSnapshot(navigationId, prev, type, extra, url) {
+function buildErrorSnapshot(navigationId, prev, type, extra, url, navigationType) {
   const frozenPartialChain = Object.freeze([...extra.partialChain]);
   const frozenPartialParams = Object.freeze({ ...extra.partialParams });
   const frozenPath = extra.path ? Object.freeze([...extra.path]) : void 0;
@@ -1109,6 +1110,7 @@ function buildErrorSnapshot(navigationId, prev, type, extra, url) {
     /** @type {Snapshot} */
     Object.freeze({
       navigationId,
+      navigationType,
       map: prev.map,
       status: "error",
       chain: prev.chain,
@@ -1129,12 +1131,14 @@ function runTransaction(source, inputUrl, env) {
   const isInitial = source === "initial";
   const isNoopEligible = source === "navigate" || source === "replace";
   const prevSnapshot = env.getSnapshot();
+  const navigationType = source === "navigate" ? "push" : source === "replace" ? "replace" : source === "popstate" ? "pop" : source;
   if (source !== "popstate" && !isValidRRU(inputUrl)) {
     return handleError(
       "invalid-rru",
       { attemptedUrl: inputUrl, partialChain: [], partialParams: {} },
       prevSnapshot,
       isInitial,
+      navigationType,
       env
     );
   }
@@ -1168,6 +1172,7 @@ function runTransaction(source, inputUrl, env) {
         { error: e, attemptedUrl: url, partialChain: [], partialParams: {} },
         prevSnapshot,
         isInitial,
+        navigationType,
         env
       );
     }
@@ -1177,6 +1182,7 @@ function runTransaction(source, inputUrl, env) {
         { attemptedUrl: url, partialChain: [], partialParams: {} },
         prevSnapshot,
         isInitial,
+        navigationType,
         env
       );
     }
@@ -1186,6 +1192,7 @@ function runTransaction(source, inputUrl, env) {
         { attemptedUrl: url, partialChain: [], partialParams: {} },
         prevSnapshot,
         isInitial,
+        navigationType,
         env
       );
     }
@@ -1195,6 +1202,7 @@ function runTransaction(source, inputUrl, env) {
         { attemptedUrl: url, partialChain: [], partialParams: {} },
         prevSnapshot,
         isInitial,
+        navigationType,
         env
       );
     }
@@ -1220,6 +1228,7 @@ function runTransaction(source, inputUrl, env) {
           },
           prevSnapshot,
           isInitial,
+          navigationType,
           env
         );
       }
@@ -1233,6 +1242,7 @@ function runTransaction(source, inputUrl, env) {
           },
           prevSnapshot,
           isInitial,
+          navigationType,
           env
         );
       }
@@ -1248,6 +1258,7 @@ function runTransaction(source, inputUrl, env) {
             },
             prevSnapshot,
             isInitial,
+            navigationType,
             env
           );
         }
@@ -1263,6 +1274,7 @@ function runTransaction(source, inputUrl, env) {
             },
             prevSnapshot,
             isInitial,
+            navigationType,
             env
           );
         }
@@ -1310,6 +1322,7 @@ function runTransaction(source, inputUrl, env) {
     partialParams,
     committedUrl,
     search,
+    navigationType,
     notFoundResult
   );
   env.commitSnapshot(snapshot);
@@ -1362,7 +1375,7 @@ function getKeysMap(map) {
   );
   return km instanceof WeakMap ? km : /* @__PURE__ */ new WeakMap();
 }
-function handleError(type, extra, prevSnapshot, isInitial, env) {
+function handleError(type, extra, prevSnapshot, isInitial, navigationType, env) {
   if (isInitial) {
     if (extra.error !== void 0) throw extra.error;
     throw new TypeError(`initial transaction failed: ${type}`);
@@ -1376,7 +1389,14 @@ function handleError(type, extra, prevSnapshot, isInitial, env) {
   }
   const navigationId = env.nextNavigationId();
   const url = normalizeRRU(env.adapter.read());
-  const snapshot = buildErrorSnapshot(navigationId, prevSnapshot, type, extra, url);
+  const snapshot = buildErrorSnapshot(
+    navigationId,
+    prevSnapshot,
+    type,
+    extra,
+    url,
+    navigationType
+  );
   env.commitSnapshot(snapshot);
   env.setLastRedirectPath(extra.path ?? []);
   env.emit("navigationError", {

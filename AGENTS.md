@@ -323,23 +323,30 @@ attachLinks(router, { navigate: nav.navigate, replace: nav.replace });
 #### `attachPreload(router, options?) → () => void`
 
 Preload-on-hover/focus complement to `attachLinks`. Calls
-`options.preload(leaf)` when the user hovers (`pointerenter`) or focuses
-(`focusin`) a `[data-router-link]`. Intended to warm the cache that
-`afterEnter` reads from. Each element preloads at most once (`WeakSet`);
-errors are swallowed.
+`options.preload(leaf, ctx)` when the user hovers (`pointerenter`) or focuses
+(`focusin`) a `[data-router-link]`. `ctx.signal` is an `AbortSignal` that
+aborts when `detach()` is called — forward it to cancellable work. Intended
+to warm the cache that `afterEnter` reads from. Each element preloads at most
+once (`WeakSet`); errors are swallowed.
 
 ```js
 attachPreload(router, {
-    preload: async leaf => {
+    preload: async (leaf, ctx) => {
         if (!isFile(leaf) || !leaf.load) return;
         if (cache.has(leaf.name)) return;
+        if (ctx.signal.aborted) return;
         cache.set(leaf.name, await leaf.load());
     },
 });
 ```
 
+Default `preload`: `leaf.preload?.(ctx) ?? leaf.load?.()`. `leaf.preload`
+receives `ctx`; `leaf.load` is called **without** arguments (`import()` does
+not accept an `AbortSignal`).
+
 - **Do not** add custom `mouseenter` listeners on `[data-router-link]` — `attachPreload` handles normalisation, matching, dedupe, and SSR.
 - **Do not** rely on `attachPreload` for correctness — it's opportunistic. `afterEnter` must still load without it.
+- **Do not** call `leaf.preload()` without `ctx` — the router's default passes `{ signal }`. If you define `preload` on `file()`, accept `ctx` as the first argument.
 
 ---
 
@@ -449,6 +456,32 @@ Returns `{ router, guard, nav }` — `guard` is the `GuardLayer` (for `pending()
 
 ---
 
+### Active links
+
+#### `attachActiveLinks(router, options?) → () => void`
+
+Subscribes to `router.subscribe` and, on every committed snapshot, sets
+`aria-current="page"` on the `[data-router-link]` matching
+`snapshot.url`. Returns `detach()` — unsubscribes and removes the
+attribute from any element this instance touched. SSR-safe: no-op
+outside the browser.
+
+```js
+import { attachActiveLinks } from '@supercat1337/router/active-links';
+
+const detach = attachActiveLinks(router);
+// or with a custom ARIA token:
+attachActiveLinks(router, { ariaCurrent: 'step' });
+attachActiveLinks(router, { ariaCurrent: false }); // no-op
+```
+
+- **Do not** expect active marking on elements added after the last commit — the DOM is rescanned on every commit. A view rendered in `afterEnter` gets its `aria-current` on the **next** commit; if you need immediate marking, call `detach()` + `attachActiveLinks(...)` after the render.
+- **Do not** rely on partial matches — matching is strict RRU equality (`/profile?tab=1` ≠ `/profile`). For "active on subpaths" wait for v2 `isActive` option, or write your own `router.subscribe`.
+- **Do not** use `ariaCurrent: false` and expect marking — it is a no-op by design (useful when toggling).
+- **Do not** manually set `aria-current` on a `[data-router-link]` that the module manages — the module only touches elements **it** marked, so a user-set attribute on an unrelated element survives, but on a managed one it will be overwritten on the next commit.
+
+---
+
 ## Common mistakes — Do / Don't
 
 ```js
@@ -535,7 +568,9 @@ Verified type surface (see `dist/types.d.ts`):
 - **Application state** — `createRouter<S, R>` preserves `S` through `getState()` and `resolveMap({ state })`; `state` is never `any` in the hot path.
 - **Router** — `Router<S, R>.url(name)` narrows `name` to `RouteNameOf<R>` (the map's route-name union).
 - **Event payloads** — typed per key: `router.on("afterEnter", p => …)` — `p` is `EventPayloads["afterEnter"]`.
-- **Snapshot** — `chain: readonly Node[]`, `params: Readonly<Record<string,string>>`, `leaf: Node | undefined`. All deeply frozen at runtime.
+- **Snapshot** — `navigationType: NavigationType`, `chain: readonly Node[]`, `params: Readonly<Record<string,string>>`, `partialParams: Readonly<Record<string,string>>`, `search: Readonly<Record<string,string>>`, `leaf: Node | undefined`. All deeply frozen at runtime.
+- **`FileMeta.load` / `FileMeta.preload`** — typed conventions for app-owned metadata on `file()`. `load: () => Promise<unknown>` — signal-free (`import()` does not accept an `AbortSignal`). `preload: (ctx: PreloadContext) => void | Promise<unknown>` — `ctx.signal` aborts on `attachPreload(...)` detach. Neither is validated at construction; `file()` only checks `name` / `title` / `layout`.
+- **`NavigationType`** — `'initial' | 'push' | 'replace' | 'pop' | 'revalidate'`. The transaction source that produced the snapshot. Not a history position and not a direction — a guard redirect during a `popstate` commits via `replace`, so the resulting snapshot is `'replace'`, not `'pop'`.
 - **`MatchResult.search`** — `Record<string, string>` on both branches (`matched` / `notFound`). Decoded values, last-wins for duplicates.
 - **`GuardErrorPayload`** — discriminated union; narrow on `err.type` in `onGuardError`.
 - **`Decision`** — `'allow' | RedirectResult | { redirect: string } | { block: true }`. Prefer `RedirectResult` from `redirect()`.

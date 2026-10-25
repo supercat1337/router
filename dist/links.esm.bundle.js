@@ -49,6 +49,11 @@ function attachPreload(router, options = {}) {
   }
   const preload = options.preload ?? defaultPreload;
   const seen = /* @__PURE__ */ new WeakSet();
+  const controller = new AbortController();
+  const ctx = (
+    /** @type {PreloadContext} */
+    { signal: controller.signal }
+  );
   async function onIntent(e) {
     const target = (
       /** @type {EventTarget | null} */
@@ -76,23 +81,24 @@ function attachPreload(router, options = {}) {
     const leaf = chain.length > 0 ? chain[chain.length - 1] : void 0;
     if (!leaf) return;
     try {
-      await preload(leaf);
+      await preload(leaf, ctx);
     } catch {
     }
   }
   document.addEventListener("pointerenter", onIntent, true);
   document.addEventListener("focusin", onIntent);
   return () => {
+    controller.abort();
     document.removeEventListener("pointerenter", onIntent, true);
     document.removeEventListener("focusin", onIntent);
   };
 }
-function defaultPreload(leaf) {
+function defaultPreload(leaf, ctx) {
   const meta = (
     /** @type {any} */
     leaf
   );
-  if (typeof meta.preload === "function") return meta.preload();
+  if (typeof meta.preload === "function") return meta.preload(ctx);
   if (typeof meta.load === "function") return meta.load();
   return void 0;
 }

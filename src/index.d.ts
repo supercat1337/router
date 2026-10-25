@@ -8,6 +8,9 @@
  */
 
 import type {
+    AttachActiveLinksOptions,
+    AttachLinksOptions,
+    AttachPreloadOptions,
     Children,
     CreateRouterOptions,
     EventPayloads,
@@ -21,10 +24,12 @@ import type {
     MapValidationErrorCode,
     MatchResult,
     NavigationErrorType,
+    NavigationType,
     NavResult,
     Node,
     NotFoundHandler,
     OnListenerError,
+    PreloadContext,
     RedirectResult,
     ResolveMapContext,
     RouteNames,
@@ -35,6 +40,7 @@ import type {
 } from './types.js';
 
 export type {
+    AttachActiveLinksOptions,
     AttachLinksOptions,
     AttachPreloadOptions,
     Children,
@@ -56,6 +62,7 @@ export type {
     MapValidationErrorCode,
     MatchResult,
     NavigationErrorType,
+    NavigationType,
     NavResult,
     Node,
     NotFoundContext,
@@ -63,6 +70,7 @@ export type {
     NotFoundResult,
     OnGuardError,
     OnListenerError,
+    PreloadContext,
     RedirectResult,
     ResolveMapContext,
     RouteNameOf,

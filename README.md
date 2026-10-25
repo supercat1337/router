@@ -23,6 +23,8 @@ A framework-agnostic routing engine where the active route tree is a **pure func
     - [Typed route names](#typed-route-names)
     - [Reading query parameters](#reading-query-parameters)
     - [`navigationId` — transaction id, not history position](#navigationid--transaction-id-not-history-position)
+    - [`navigationType` — transaction source, not history direction](#navigationtype--transaction-source-not-history-direction)
+- [Recipes](#recipes)
 - [Recipes](#recipes)
     - [Protected route](#protected-route)
     - [Nested layout](#nested-layout)
@@ -38,6 +40,7 @@ A framework-agnostic routing engine where the active route tree is a **pure func
     - [`@supercat1337/router/adapters`](#supercat1337routeradapters)
     - [`@supercat1337/router/links`](#supercat1337routerlinks)
     - [`@supercat1337/router/guard`](#supercat1337routerguard)
+    - [`@supercat1337/router/active-links`](#supercat1337routeractive-links)
 - [SSR](#ssr)
 - [Public API cheat-sheet](#public-api-cheat-sheet)
 - [Examples](#examples)
@@ -415,6 +418,43 @@ router.on('afterEnter', ({ snapshot }) => {
 ```
 
 Not usable as: a history position, a back/forward indicator, or a "remount key" (compare `url` / `params` for that).
+
+### `navigationType` — transaction source, not history direction
+
+`navigationType` records **what triggered** the commit that produced the snapshot:
+
+| Value          | Source                                                   |
+| -------------- | -------------------------------------------------------- |
+| `'initial'`    | the first commit inside `createRouter`                   |
+| `'push'`       | `router.navigate(url)`                                   |
+| `'replace'`    | `router.replace(url)`                                    |
+| `'pop'`        | a `popstate` / `hashchange` from the browser             |
+| `'revalidate'` | `router.revalidate()` — recompute without moving the URL |
+
+```js
+router.navigate('/profile');
+router.getSnapshot().navigationType; // 'push'
+
+router.replace('/profile');
+router.getSnapshot().navigationType; // 'replace'
+
+appState.isAuthed = true;
+router.revalidate();
+router.getSnapshot().navigationType; // 'revalidate'
+
+// browser back/forward → 'pop'
+```
+
+Use it where the **kind** of transition matters: analytics, animation direction (popstate usually needs a different transition than push), scroll-restoration policy (`navigationType !== 'pop'` → scroll to top, `'pop'` → restore).
+
+**Two properties to remember.**
+
+1. **It's not a direction indicator.** A guard that redirects during a `popstate` commits via `router.replace(...)`, so the resulting snapshot has `navigationType: 'replace'`, not `'pop'`. Direction (was it back or forward?) lives in `history.state` and is **not** available on `Snapshot` — see the next point.
+2. **It's not a "go back" button.** `router.back()` / `router.forward()` delegate to `history.back()` / `history.forward()`; the resulting commit arrives through the `popstate` listener as `'pop'`. `navigationType` describes the commit's **origin**, not the user's intent.
+
+On error snapshots, `navigationType` reflects the **attempted** transaction, not the previous commit — a `resolver-throw` during `navigate()` produces `navigationType: 'push'`, not the `'initial'` or `'push'` that produced `prev`.
+
+Direction (back vs forward) is deliberately **not** part of `Snapshot`: it would require stateful tracking in the adapter (`history.state.__idx`), which breaks the `(state, url) → map` contract and the guard layer's rollback/redirect semantics. For back/forward direction, track `history.state` yourself or use a companion adapter package.
 
 ---
 
@@ -849,23 +889,31 @@ import { isFile } from '@supercat1337/router';
 // Same cache that afterEnter reads from:
 const loaded = new Map();
 
-attachPreload(router, {
-    preload: async leaf => {
+const detach = attachPreload(router, {
+    preload: async (leaf, ctx) => {
         if (!isFile(leaf) || !leaf.load) return;
         if (loaded.has(leaf.name)) return;
+        if (ctx.signal.aborted) return;
+        // Optional: pass ctx.signal to fetch / custom loaders.
         loaded.set(leaf.name, await leaf.load());
     },
 });
 ```
 
 `attachPreload` normalizes the `href`, matches against the **current** map
-(`router.getSnapshot().map`), and calls `preload(leaf)` for the matched
-leaf. Errors from `preload` are swallowed — preload is opportunistic;
+(`router.getSnapshot().map`), and calls `preload(leaf, ctx)` for the matched
+leaf. `ctx.signal` is an `AbortSignal` that **aborts when `detach()` is
+called** — forward it to any cancellable work (fetch, custom loaders).
+Errors from `preload` are swallowed — preload is opportunistic;
 `afterEnter` will retry with proper UX.
 
 Dedupe: each `<a>` element preloads at most once (`WeakSet`). SPA re-renders
 create fresh `<a>` nodes, which preload again — the user cache is the
-second line of defense. Default `preload`: `leaf.preload?.() ?? leaf.load?.()`.
+second line of defense.
+
+Default `preload`: `leaf.preload?.(ctx) ?? leaf.load?.()`. `leaf.preload`
+receives `ctx`; `leaf.load` is called **without** arguments (`import()`
+does not accept an `AbortSignal`).
 
 ### `@supercat1337/router/guard`
 
@@ -889,6 +937,49 @@ attachLinks(router, { navigate: nav.navigate, replace: nav.replace });
 Wiring order is mandatory for the manual form — `wrapAdapter` → `createRouter` → `bind` → `navigate()` → `attachLinks`.
 
 Multi-step guards with cancellation can use `@supercat1337/chain` (see [Related packages](#related-packages)).
+
+### `@supercat1337/router/active-links`
+
+Opt-in `aria-current` marking for `[data-router-link]` elements — the a11y
+complement to `attachLinks`.
+
+```js
+import { attachActiveLinks } from '@supercat1337/router/active-links';
+
+const detach = attachActiveLinks(router);
+// <a href="/profile" data-router-link>Profile</a>
+// → gets aria-current="page" when snapshot.url === '/profile'
+```
+
+The module subscribes to `router.subscribe` and, on every committed
+snapshot, scans the DOM, matches each link's `href` against
+`snapshot.url`, and sets `aria-current` on the matching one. `detach()`
+unsubscribes and removes the attribute from any element this instance
+touched — a user-set `aria-current` on an unrelated element is left
+alone.
+
+**Customize the ARIA token.** `'page'` is the default; `'step'`,
+`'location'`, `'date'`, `'time'`, `true` (→ `aria-current="true"`) are
+also accepted. `false` disables the module entirely.
+
+```js
+attachActiveLinks(router, { ariaCurrent: 'step' });
+attachActiveLinks(router, { ariaCurrent: false }); // no-op
+```
+
+**Limitations (v1).**
+
+- **Strict RRU equality.** `/profile?tab=1` is not active at `/profile`;
+  `/users/5` is not active at `/users/5/`. Query strings are compared
+  as-is.
+- **DOM is rescanned on every commit.** Elements added **after** the
+  last commit (e.g. by a view render in `afterEnter`) do not receive
+  `aria-current` until the next commit. If you need immediate marking,
+  call `detach()` + `attachActiveLinks(...)` after the render, or wait
+  for v2 (`MutationObserver`).
+- **No matching customization yet.** If you need "active on subpaths"
+  (e.g. `/users/5` activates `/users`), wait for the `isActive` option
+  in v2 — or write your own `router.subscribe` + DOM walk.
 
 ---
 
@@ -1056,6 +1147,8 @@ If you are generating code against this package:
 - Public surface is `dist/types.d.ts` (shipped in the npm package). A diff-friendly API report is at `etc/*.api.md` on GitHub. Methods like `getHistory`, `dryMatch`, `getActiveMap`, `resolveMapFor`, `getRedirectPath` are **dev-only**, `@internal`, and stripped from the public `.d.ts`. Do not use them in library code.
 - `Snapshot.url` is a **Router-relative URL** (RRU), not `location.pathname + search`. Browser URLs (BU) live only inside the adapter.
 - `navigationId` is a **transaction identifier**, not a history position and not a key for remounting components. Use it only for `router.isCurrent(id)` correlation of async work.
+- `navigationType` is the **transaction source** (`'initial' | 'push' | 'replace' | 'pop' | 'revalidate'`), not a history direction. Do **not** use it as a "back/forward" indicator — a guard that redirects during a `popstate` commits via `router.replace(...)`, so the snapshot shows `'replace'`, not `'pop'`. For back/forward direction, track `history.state` yourself or use a companion adapter; `Snapshot` stays a pure function of `(state, url)` plus the transaction source.
+- **Code splitting uses `FileMeta.load`; hover/focus preload uses `FileMeta.preload`.** `load` is `() => Promise<unknown>` — call it without arguments in `afterEnter` (`import()` is signal-free). `preload` is `(ctx: PreloadContext) => void | Promise<unknown>` — forward `ctx.signal` to cancellable work. `attachPreload`'s default follows `leaf.preload?.(ctx) ?? leaf.load?.()`. Do **not** call `leaf.preload()` without `ctx`.
 - **Framework integration** uses `router.subscribe` — one subscription, fires on every commit. Do **not** stitch together `afterEnter` / `afterLeave` / `mapChanged` / `navigationError`: that pattern misses `revalidate()` without a URL change and misses prod error snapshots.
 - **Route names from external data** are validated with `hasRoute(map, name)` **once at data-load time**, not with `try/catch` around every `url()` call. `hasRoute` does **not** validate params — `url(name)` may still throw for missing `:name` values.
 - **Redirects in guards** use `redirect('/x')` (branded) — `isRedirect()` narrows everywhere. The legacy `{ redirect: '/x' }` shape is accepted for backward compatibility but should not be introduced in new code.

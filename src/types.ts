@@ -31,6 +31,23 @@ export interface FileMeta {
     /** Optional layout identifier (app-owned). */
     layout?: string;
 
+    /**
+     * View module loader — called by the user's `afterEnter` for code
+     * splitting and, on hover/focus, by `attachPreload`'s default
+     * `preload`. Must be signal-free: `import()` does not accept an
+     * `AbortSignal`. Not validated at construction — `file()` trusts
+     * the caller.
+     */
+    load?: () => Promise<unknown>;
+
+    /**
+     * Preload hook — called by `attachPreload` (and by user code that
+     * follows the same convention) with a `PreloadContext`.
+     * `ctx.signal` aborts on `attachPreload(...)` detach; forward it
+     * to cancellable work. Not validated at construction.
+     */
+    preload?: (ctx: PreloadContext) => void | Promise<unknown>;
+
     /** Application-owned metadata; passed through unchanged. */
     [key: string]: any;
 }
@@ -293,6 +310,27 @@ export type NavigationErrorType =
     | 'redirect-loop';
 
 /**
+ * How the transaction that produced a `Snapshot` was initiated.
+ *
+ * - `'initial'` — the first commit inside `createRouter`.
+ * - `'push'` — `router.navigate(...)`.
+ * - `'replace'` — `router.replace(...)`.
+ * - `'pop'` — a `popstate` / `hashchange` from the browser (back / forward).
+ * - `'revalidate'` — `router.revalidate()` (recomputes the active map
+ *   without moving the browser URL).
+ *
+ * `navigationType` describes **what triggered** the commit, not a history
+ * position. It is not a direction indicator: a guard that redirects during
+ * a `popstate` commits via `router.replace(...)`, so `navigationType` is
+ * `'replace'`, not `'pop'`. For back/forward direction, track
+ * `history.state` yourself or use a companion adapter — `Snapshot` stays
+ * a pure function of `(state, url)` plus the transaction source.
+ *
+ * @public
+ */
+export type NavigationType = 'initial' | 'push' | 'replace' | 'pop' | 'revalidate';
+
+/**
  * The committed state of the router after a transaction.
  *
  * `url` is a Router-relative URL (RRU), not `location.pathname + search`.
@@ -309,6 +347,12 @@ export type NavigationErrorType =
 export interface Snapshot {
     /** Transaction identifier; monotonic; not a history position. */
     readonly navigationId: number;
+
+    /**
+     * How the transaction that produced this snapshot was initiated.
+     * Not a history position and not a direction — see `NavigationType`.
+     */
+    readonly navigationType: NavigationType;
 
     /** The committed map; on error, the previous committed map. */
     readonly map: RouterMap;
@@ -844,6 +888,20 @@ export interface AttachLinksOptions {
 }
 
 /**
+ * Context passed to a preload function.
+ *
+ * `signal` aborts when `attachPreload(...)` is detached. Forward it to
+ * any cancellable work (`fetch`, custom loaders). It is not tied to a
+ * navigation transaction — abort happens on detach only.
+ *
+ * @public
+ */
+export interface PreloadContext {
+    /** Aborts when `attachPreload(...)` is detached. */
+    readonly signal: AbortSignal;
+}
+
+/**
  * Options for `attachPreload`. `preload` receives the matched leaf node —
  * a `Node` (narrow with `isFile` if you need `.name` / `.load`). Return
  * value is ignored; a returned Promise is awaited and its rejection is
@@ -854,8 +912,32 @@ export interface AttachLinksOptions {
 export interface AttachPreloadOptions {
     /**
      * Called when the user hovers or focuses a `[data-router-link]`.
-     * Receives the matched leaf node. Default:
-     * `leaf.preload?.() ?? leaf.load?.()`.
+     * Receives the matched leaf node and a `PreloadContext` with an
+     * `AbortSignal` that aborts on `detach()`. Return value is ignored;
+     * a returned Promise is awaited and its rejection is swallowed.
+     *
+     * Default: `leaf.preload?.(ctx) ?? leaf.load?.()` — `leaf.preload`
+     * receives `ctx`, `leaf.load` is called without arguments
+     * (`import()` does not accept an `AbortSignal`).
      */
-    preload?: (leaf: Node) => void | Promise<unknown>;
+    preload?: (leaf: Node, ctx: PreloadContext) => void | Promise<unknown>;
+}
+
+/**
+ * Options for `attachActiveLinks`.
+ *
+ * @public
+ */
+export interface AttachActiveLinksOptions {
+    /**
+     * ARIA `current` token applied to the active `[data-router-link]`.
+     * Default `'page'`.
+     *
+     * - `false` — disable the module entirely (no-op `attach`).
+     * - `true` — sets `aria-current="true"` (valid generic token).
+     * - `'page' | 'step' | 'location' | 'date' | 'time'` — token as-is.
+     *
+     * @see https://www.w3.org/TR/wai-aria-1.2/#aria-current
+     */
+    ariaCurrent?: boolean | 'page' | 'step' | 'location' | 'date' | 'time';
 }

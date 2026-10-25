@@ -1,12 +1,12 @@
 // @ts-check
 
-import { normalizeRRU } from './normalize.js';
 
 /**
  * @typedef {import('./types.js').Snapshot} Snapshot
  * @typedef {import('./types.js').Node} Node
  * @typedef {import('./types.js').RouterMap} RouterMap
  * @typedef {import('./types.js').NavigationErrorType} NavigationErrorType
+ * @typedef {import('./types.js').NavigationType} NavigationType
  */
 
 /**
@@ -88,6 +88,7 @@ export function commonChainPrefix(prev, next, getKeysMap) {
  * @param {Record<string, string>} partialParams
  * @param {string} url
  * @param {Record<string, string>} search
+ * @param {NavigationType} navigationType
  * @param {unknown} [notFoundResult]
  * @returns {Snapshot}
  */
@@ -100,6 +101,7 @@ export function buildSnapshot(
     partialParams,
     url,
     search,
+    navigationType,
     notFoundResult
 ) {
     const frozenChain = Object.freeze([...chain]);
@@ -109,6 +111,7 @@ export function buildSnapshot(
     /** @type {any} */
     const snap = {
         navigationId,
+        navigationType,
         map,
         status,
         chain: frozenChain,
@@ -129,9 +132,10 @@ export function buildSnapshot(
  * @param {NavigationErrorType} type
  * @param {{ error?: unknown, attemptedUrl: string, path?: string[], partialChain: Node[], partialParams: Record<string, string> }} extra
  * @param {string} url
+ * @param {NavigationType} navigationType
  * @returns {Snapshot}
  */
-export function buildErrorSnapshot(navigationId, prev, type, extra, url) {
+export function buildErrorSnapshot(navigationId, prev, type, extra, url, navigationType) {
     const frozenPartialChain = Object.freeze([...extra.partialChain]);
     const frozenPartialParams = Object.freeze({ ...extra.partialParams });
     const frozenPath = extra.path ? Object.freeze([...extra.path]) : undefined;
@@ -146,6 +150,7 @@ export function buildErrorSnapshot(navigationId, prev, type, extra, url) {
     return /** @type {Snapshot} */ (
         Object.freeze({
             navigationId,
+            navigationType,
             map: prev.map,
             status: 'error',
             chain: prev.chain, // already frozen

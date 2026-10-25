@@ -44,7 +44,8 @@ export declare interface AttachLinksOptions {
 /**
  * Attach preload-on-hover/focus to `[data-router-link]` elements. When the
  * user hovers or focuses a link, normalizes its `href` and calls
- * `options.preload(leaf)` for the matched leaf node. Intended to warm a
+ * `options.preload(leaf, ctx)` for the matched leaf node. `ctx.signal`
+ * aborts when `attachPreload(...)` is detached. Intended to warm a
  * user-owned cache that `afterEnter` reads from.
  *
  * Each element preloads at most once (`WeakSet`). Errors from `preload`
@@ -72,10 +73,15 @@ options?: AttachPreloadOptions
 export declare interface AttachPreloadOptions {
     /**
      * Called when the user hovers or focuses a `[data-router-link]`.
-     * Receives the matched leaf node. Default:
-     * `leaf.preload?.() ?? leaf.load?.()`.
+     * Receives the matched leaf node and a `PreloadContext` with an
+     * `AbortSignal` that aborts on `detach()`. Return value is ignored;
+     * a returned Promise is awaited and its rejection is swallowed.
+     *
+     * Default: `leaf.preload?.(ctx) ?? leaf.load?.()` — `leaf.preload`
+     * receives `ctx`, `leaf.load` is called without arguments
+     * (`import()` does not accept an `AbortSignal`).
      */
-    preload?: (leaf: Node_2) => void | Promise<unknown>;
+    preload?: (leaf: Node_2, ctx: PreloadContext) => void | Promise<unknown>;
 }
 
 /**
@@ -106,6 +112,21 @@ declare interface FileMeta {
     title?: string;
     /** Optional layout identifier (app-owned). */
     layout?: string;
+    /**
+     * View module loader — called by the user's `afterEnter` for code
+     * splitting and, on hover/focus, by `attachPreload`'s default
+     * `preload`. Must be signal-free: `import()` does not accept an
+     * `AbortSignal`. Not validated at construction — `file()` trusts
+     * the caller.
+     */
+    load?: () => Promise<unknown>;
+    /**
+     * Preload hook — called by `attachPreload` (and by user code that
+     * follows the same convention) with a `PreloadContext`.
+     * `ctx.signal` aborts on `attachPreload(...)` detach; forward it
+     * to cancellable work. Not validated at construction.
+     */
+    preload?: (ctx: PreloadContext) => void | Promise<unknown>;
     /** Application-owned metadata; passed through unchanged. */
     [key: string]: any;
 }
@@ -212,6 +233,27 @@ declare type MatchResult = {
 declare type NavigationErrorType = 'invalid-rru' | 'resolver-null' | 'resolver-promise' | 'resolver-throw' | 'resolver-invalid' | 'notFound-promise' | 'notFound-throw' | 'redirect-loop';
 
 /**
+ * How the transaction that produced a `Snapshot` was initiated.
+ *
+ * - `'initial'` — the first commit inside `createRouter`.
+ * - `'push'` — `router.navigate(...)`.
+ * - `'replace'` — `router.replace(...)`.
+ * - `'pop'` — a `popstate` / `hashchange` from the browser (back / forward).
+ * - `'revalidate'` — `router.revalidate()` (recomputes the active map
+ *   without moving the browser URL).
+ *
+ * `navigationType` describes **what triggered** the commit, not a history
+ * position. It is not a direction indicator: a guard that redirects during
+ * a `popstate` commits via `router.replace(...)`, so `navigationType` is
+ * `'replace'`, not `'pop'`. For back/forward direction, track
+ * `history.state` yourself or use a companion adapter — `Snapshot` stays
+ * a pure function of `(state, url)` plus the transaction source.
+ *
+ * @public
+ */
+declare type NavigationType_2 = 'initial' | 'push' | 'replace' | 'pop' | 'revalidate';
+
+/**
  * Either kind of route node.
  *
  * @public
@@ -253,6 +295,20 @@ declare type NotFoundHandler = (ctx: NotFoundContext) => NotFoundResult;
  * @public
  */
 declare type NotFoundResult = unknown;
+
+/**
+ * Context passed to a preload function.
+ *
+ * `signal` aborts when `attachPreload(...)` is detached. Forward it to
+ * any cancellable work (`fetch`, custom loaders). It is not tied to a
+ * navigation transaction — abort happens on detach only.
+ *
+ * @public
+ */
+export declare interface PreloadContext {
+    /** Aborts when `attachPreload(...)` is detached. */
+    readonly signal: AbortSignal;
+}
 
 /**
  * A router map produced by `createMap`. Immutable; do not construct by hand.
@@ -297,6 +353,11 @@ declare interface RouterMap<RouteName extends string = string> {
 declare interface Snapshot {
     /** Transaction identifier; monotonic; not a history position. */
     readonly navigationId: number;
+    /**
+     * How the transaction that produced this snapshot was initiated.
+     * Not a history position and not a direction — see `NavigationType`.
+     */
+    readonly navigationType: NavigationType_2;
     /** The committed map; on error, the previous committed map. */
     readonly map: RouterMap;
     /** Outcome of the transaction. */

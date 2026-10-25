@@ -5,9 +5,15 @@
  * @packageDocumentation
  */
 
-import type { AttachLinksOptions, AttachPreloadOptions, Snapshot, UrlAdapter } from './types.js';
+import type {
+    AttachLinksOptions,
+    AttachPreloadOptions,
+    PreloadContext,
+    Snapshot,
+    UrlAdapter,
+} from './types.js';
 
-export type { AttachLinksOptions, AttachPreloadOptions, UrlAdapter };
+export type { AttachLinksOptions, AttachPreloadOptions, PreloadContext, UrlAdapter };
 
 /**
  * Attach a single delegated click listener on `document` that intercepts
@@ -35,7 +41,8 @@ export declare function attachLinks(
 /**
  * Attach preload-on-hover/focus to `[data-router-link]` elements. When the
  * user hovers or focuses a link, normalizes its `href` and calls
- * `options.preload(leaf)` for the matched leaf node. Intended to warm a
+ * `options.preload(leaf, ctx)` for the matched leaf node. `ctx.signal`
+ * aborts when `attachPreload(...)` is detached. Intended to warm a
  * user-owned cache that `afterEnter` reads from.
  *
  * Each element preloads at most once (`WeakSet`). Errors from `preload`

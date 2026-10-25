@@ -40,7 +40,7 @@ function attachLinks(router, options = {}) {
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
 
         const target = /** @type {EventTarget | null} */ (e.target);
-        if (!target || typeof /** @type {any} */ (target).closest !== 'function') {
+        if (!target || typeof (/** @type {any} */ (target).closest) !== 'function') {
             return;
         }
 
@@ -71,6 +71,7 @@ function attachLinks(router, options = {}) {
 
 /**
  * @typedef {import('./types.js').AttachPreloadOptions} AttachPreloadOptions
+ * @typedef {import('./types.js').PreloadContext} PreloadContext
  * @typedef {import('./types.js').Node} Node
  * @typedef {import('./types.js').Snapshot} Snapshot
  *
@@ -84,9 +85,14 @@ function attachLinks(router, options = {}) {
  *
  * When the user hovers or focuses a link, `attachPreload` normalizes the
  * `href` via `router.adapter.normalize`, matches it against the **current**
- * map (`router.getSnapshot().map`), and calls `options.preload(leaf)` for
- * the resulting leaf node. Intended to warm a user-owned cache — the same
- * cache `afterEnter` reads from.
+ * map (`router.getSnapshot().map`), and calls `options.preload(leaf, ctx)`
+ * for the resulting leaf node. Intended to warm a user-owned cache — the
+ * same cache `afterEnter` reads from.
+ *
+ * `ctx.signal` is an `AbortSignal` that aborts when `detach()` is called.
+ * Pass it through to any cancellable work (fetch, custom loaders). The
+ * default `preload` forwards it to `leaf.preload(ctx)`; `leaf.load()` is
+ * called without a signal (`import()` does not accept one).
  *
  * Dedupe: each `<a>` element fires `preload` at most once (`WeakSet`). SPA
  * re-renders create fresh `<a>` nodes, so a link that survives a view
@@ -109,11 +115,13 @@ function attachPreload(router, options = {}) {
     const preload = options.preload ?? defaultPreload;
     /** @type {WeakSet<Element>} */
     const seen = new WeakSet();
+    const controller = new AbortController();
+    const ctx = /** @type {PreloadContext} */ ({ signal: controller.signal });
 
     /** @param {Event} e */
     async function onIntent(e) {
         const target = /** @type {EventTarget | null} */ (e.target);
-        if (!target || typeof /** @type {any} */ (target).closest !== 'function') {
+        if (!target || typeof (/** @type {any} */ (target).closest) !== 'function') {
             return;
         }
         const el = /** @type {Element | null} */ (/** @type {any} */ (target).closest(SELECTOR));
@@ -135,7 +143,7 @@ function attachPreload(router, options = {}) {
         if (!leaf) return;
 
         try {
-            await preload(leaf);
+            await preload(leaf, ctx);
         } catch {
             // Opportunistic — swallow. afterEnter will retry with proper UX.
         }
@@ -145,21 +153,26 @@ function attachPreload(router, options = {}) {
     document.addEventListener('focusin', onIntent);
 
     return () => {
+        controller.abort();
         document.removeEventListener('pointerenter', onIntent, true);
         document.removeEventListener('focusin', onIntent);
     };
 }
 
 /**
- * Default preload: prefer `leaf.preload`, fall back to `leaf.load`.
+ * Default preload: prefer `leaf.preload(ctx)`, fall back to `leaf.load()`.
  * Both are app-owned metadata on `file()` — not part of the public type.
  *
+ * `leaf.preload` receives `ctx` (with `signal`); `leaf.load` is called
+ * without arguments — `import()` does not accept an `AbortSignal`.
+ *
  * @param {Node} leaf
+ * @param {PreloadContext} ctx
  * @returns {void | Promise<unknown>}
  */
-function defaultPreload(leaf) {
+function defaultPreload(leaf, ctx) {
     const meta = /** @type {any} */ (leaf);
-    if (typeof meta.preload === 'function') return meta.preload();
+    if (typeof meta.preload === 'function') return meta.preload(ctx);
     if (typeof meta.load === 'function') return meta.load();
     return undefined;
 }

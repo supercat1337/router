@@ -1,6 +1,6 @@
 {
     "name": "@supercat1337/router",
-    "version": "0.4.0",
+    "version": "0.5.0",
     "description": "Synchronous state-relative router for SPA and SSR over a tree of JS objects.",
     "author": "Albert Bazaleev",
     "license": "MIT",
@@ -22,6 +22,10 @@
         "./guard": {
             "types": "./dist/guard.d.ts",
             "import": "./dist/guard.esm.js"
+        },
+        "./active-links": {
+            "types": "./dist/active-links.d.ts",
+            "import": "./dist/active-links.esm.js"
         }
     },
     "types": "dist/types.d.ts",
@@ -29,10 +33,10 @@
         "test": "npm run typecheck && c8 ava",
         "typecheck": "tsc -p tsconfig.typecheck.json",
         "clean": "shx rm -rf ./dist && shx mkdir ./dist",
-        "build_esm": "rollup ./src/index.js --file ./dist/router.esm.js --format es && rollup ./src/adapters.js --file ./dist/adapters.esm.js --format es && rollup ./src/links.js --file ./dist/links.esm.js --format es && rollup ./src/guard.js --file ./dist/guard.esm.js --format es",
-        "build_esm_bundle": "esbuild ./src/index.js --format=esm --bundle --platform=neutral --outfile=./dist/router.esm.bundle.js && esbuild ./src/adapters.js --format=esm --bundle --platform=neutral --outfile=./dist/adapters.esm.bundle.js && esbuild ./src/links.js --format=esm --bundle --platform=neutral --outfile=./dist/links.esm.bundle.js && esbuild ./src/guard.js --format=esm --bundle --platform=neutral --outfile=./dist/guard.esm.bundle.js",
-        "gen_types": "npx tsc --project my.tsconfig.types.json && shx cp src/index.d.ts dist/types-temp/src/index.d.ts && shx cp src/adapters.d.ts dist/types-temp/src/adapters.d.ts && shx cp src/links.d.ts dist/types-temp/src/links.d.ts && shx cp src/guard.d.ts dist/types-temp/src/guard.d.ts",
-        "bundle_types": "api-extractor run --local -c api-extractor.json && api-extractor run --local -c api-extractor.adapters.json && api-extractor run --local -c api-extractor.links.json && api-extractor run --local -c api-extractor.guard.json",
+        "build_esm": "rollup ./src/index.js --file ./dist/router.esm.js --format es && rollup ./src/adapters.js --file ./dist/adapters.esm.js --format es && rollup ./src/links.js --file ./dist/links.esm.js --format es && rollup ./src/guard.js --file ./dist/guard.esm.js --format es && rollup ./src/active-links.js --file ./dist/active-links.esm.js --format es",
+        "build_esm_bundle": "esbuild ./src/index.js --format=esm --bundle --platform=neutral --outfile=./dist/router.esm.bundle.js && esbuild ./src/adapters.js --format=esm --bundle --platform=neutral --outfile=./dist/adapters.esm.bundle.js && esbuild ./src/links.js --format=esm --bundle --platform=neutral --outfile=./dist/links.esm.bundle.js && esbuild ./src/guard.js --format=esm --bundle --platform=neutral --outfile=./dist/guard.esm.bundle.js && esbuild ./src/active-links.js --format=esm --bundle --platform=neutral --outfile=./dist/active-links.esm.bundle.js",
+        "gen_types": "npx tsc --project my.tsconfig.types.json && shx cp src/index.d.ts dist/types-temp/src/index.d.ts && shx cp src/adapters.d.ts dist/types-temp/src/adapters.d.ts && shx cp src/links.d.ts dist/types-temp/src/links.d.ts && shx cp src/guard.d.ts dist/types-temp/src/guard.d.ts && shx cp src/active-links.d.ts dist/types-temp/src/active-links.d.ts",
+        "bundle_types": "api-extractor run --local -c api-extractor.json && api-extractor run --local -c api-extractor.adapters.json && api-extractor run --local -c api-extractor.links.json && api-extractor run --local -c api-extractor.guard.json && api-extractor run --local -c api-extractor.active-links.json",
         "build": "npm run clean && npm run build_esm && npm run build_esm_bundle && npm run gen_types && npm run bundle_types && shx rm -rf dist/types-temp",
         "lint": "eslint src/ tests/",
         "prepublishOnly": "npm run build && npm test"
@@ -69,10 +73,13 @@
         "dist/links.esm.bundle.js",
         "dist/guard.esm.js",
         "dist/guard.esm.bundle.js",
+        "dist/active-links.esm.js",
+        "dist/active-links.esm.bundle.js",
         "dist/types.d.ts",
         "dist/adapters.d.ts",
         "dist/links.d.ts",
         "dist/guard.d.ts",
+        "dist/active-links.d.ts",
         "README.md",
         "LICENSE.txt"
     ],

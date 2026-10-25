@@ -102,7 +102,9 @@ export interface EventPayloads {
 export interface FileMeta {
     [key: string]: any;
     layout?: string;
+    load?: () => Promise<unknown>;
     name: string;
+    preload?: (ctx: PreloadContext) => void | Promise<unknown>;
     title?: string;
 }
 
@@ -204,6 +206,10 @@ export type MatchResult = {
 export type NavigationErrorType = 'invalid-rru' | 'resolver-null' | 'resolver-promise' | 'resolver-throw' | 'resolver-invalid' | 'notFound-promise' | 'notFound-throw' | 'redirect-loop';
 
 // @public
+type NavigationType_2 = 'initial' | 'push' | 'replace' | 'pop' | 'revalidate';
+export { NavigationType_2 as NavigationType }
+
+// @public
 export type NavResult = {
     status: 'committed';
     snapshot: Snapshot;
@@ -240,6 +246,11 @@ export type OnListenerError = (err: unknown, info: {
     event: keyof EventPayloads;
     snapshot: Snapshot;
 }) => void;
+
+// @public
+export interface PreloadContext {
+    readonly signal: AbortSignal;
+}
 
 // @public
 export interface RedirectResult {
@@ -302,6 +313,7 @@ export interface Snapshot {
     readonly leaf: Node_2 | undefined;
     readonly map: RouterMap;
     readonly navigationId: number;
+    readonly navigationType: NavigationType_2;
     readonly notFoundResult?: unknown;
     readonly params: Readonly<Record<string, string>>;
     readonly partialParams: Readonly<Record<string, string>>;
