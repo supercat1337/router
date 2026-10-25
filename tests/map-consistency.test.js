@@ -23,14 +23,14 @@ test('all maps expose shared routes', t => {
     const userMap = createMap(
         {
             ...publicRoutes(),
-            profile: folder({}, { index: file({ name: 'profile' }) }),
+            profile: folder( { index: file({ name: 'profile' }) }),
         },
         { notFound: nf }
     );
     const adminMap = createMap(
         {
             ...publicRoutes(),
-            admin: folder({}, { index: file({ name: 'adminHome' }) }),
+            admin: folder( { index: file({ name: 'adminHome' }) }),
         },
         { notFound: nf }
     );

@@ -19,21 +19,17 @@ function fixtures() {
             login: file({ name: 'login' }),
             'reset-password': file({ name: 'resetPassword' }),
             admin: folder(
-                {},
                 {
                     index: file({ name: 'adminHome' }),
                     users: folder(
-                        {},
                         {
                             index: file({ name: 'adminUsers' }),
                             ':id': file({ name: 'adminUser' }),
                         }
                     ),
                     reports: folder(
-                        {},
                         {
                             ':year': folder(
-                                {},
                                 {
                                     index: file({ name: 'adminReportsYear' }),
                                     ':month': file({
@@ -106,10 +102,8 @@ test('roundtrip: index under dynamic ancestor', t => {
     const m = createMap(
         {
             users: folder(
-                {},
                 {
                     ':id': folder(
-                        {},
                         {
                             index: file({ name: 'userHome' }),
                             edit: file({ name: 'userEdit' }),

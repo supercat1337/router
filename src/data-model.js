@@ -51,67 +51,71 @@ export function file(meta) {
 /**
  * Create a `folder` node.
  *
- * Validates the **subtree** — `options` shape, `notFound` (best-effort
- * sync check), `children` keys, `index`/`*` must be files, `:name`
- * collisions. Tree-wide invariants (name uniqueness, top-level `index`,
- * node construction) are enforced by `createMap`.
+ * Validates the **subtree** — `children` shape and keys (literal, `:name`,
+ * `*`, `index`), `index`/`*` must be files, `:name` collisions; and
+ * `options.notFound` (best-effort sync check). Tree-wide invariants (name
+ * uniqueness, top-level `index`, node construction) are enforced by
+ * `createMap`.
  *
- * `notFound` async-ness is checked best-effort via `AsyncFunction`
+ * `options` is optional (default `{}`). When `options.notFound` is omitted,
+ * the nearest ancestor with a `notFound` handles the miss, up to
+ * `map.notFound`.
+ *
+ * `options.notFound` async-ness is checked best-effort via `AsyncFunction`
  * toString inspection; a plain function returning a Promise is not
  * detected here and will surface at runtime as `notFound-promise`.
  *
- * @template {FolderOptions} O
  * @template {Children} C
- * @param {O} options
  * @param {C} children
- * @returns {import('./types.js').FolderNode<O, C>}
+ * @param {FolderOptions} [options]
+ * @returns {import('./types.js').FolderNode<FolderOptions, C>}
  */
-export function folder(options, children) {
+export function folder(children, options = {}) {
     if (options === null || typeof options !== 'object' || Array.isArray(options)) {
-        throw new TypeError('folder(options, children): options must be a plain object');
+        throw new TypeError('folder(children, options): options must be a plain object');
     }
     if (options.notFound !== undefined && typeof options.notFound !== 'function') {
         throw new TypeError(
-            'folder(options, children): options.notFound must be a function when provided'
+            'folder(children, options): options.notFound must be a function when provided'
         );
     }
     if (options.notFound !== undefined && isAsyncFunction(options.notFound)) {
-        throw new TypeError('folder(options, children): options.notFound must be synchronous');
+        throw new TypeError('folder(children, options): options.notFound must be synchronous');
     }
     if (children === null || typeof children !== 'object' || Array.isArray(children)) {
-        throw new TypeError('folder(options, children): children must be a plain object');
+        throw new TypeError('folder(children, options): children must be a plain object');
     }
     const keys = Object.keys(children);
     if (keys.length === 0) {
-        throw new TypeError('folder(options, children): children must be non-empty');
+        throw new TypeError('folder(children, options): children must be non-empty');
     }
 
     let hasParamKey = false;
     for (const key of keys) {
         const parsed = parseKey(key);
         if (parsed === null) {
-            throw new TypeError(`folder(options, children): invalid key ${JSON.stringify(key)}`);
+            throw new TypeError(`folder(children, options): invalid key ${JSON.stringify(key)}`);
         }
         const child = children[key];
         if (parsed.kind === 'wildcard' && !isFile(child)) {
             throw new TypeError(
-                `folder(options, children): '*' must be a file, got folder at ${JSON.stringify(key)}`
+                `folder(children, options): '*' must be a file, got folder at ${JSON.stringify(key)}`
             );
         }
         if (parsed.kind === 'index' && !isFile(child)) {
-            throw new TypeError("folder(options, children): 'index' must be a file");
+            throw new TypeError("folder(children, options): 'index' must be a file");
         }
         if (parsed.kind === 'param') {
             if (hasParamKey) {
                 throw new TypeError(
-                    `folder(options, children): only one ':name' key per level is allowed, got ${JSON.stringify(key)} as second`
+                    `folder(children, options): only one ':name' key per level is allowed, got ${JSON.stringify(key)} as second`
                 );
             }
             hasParamKey = true;
         }
     }
 
-    return /** @type {import('./types.js').FolderNode<O, C>} */ (
+    return /** @type {import('./types.js').FolderNode<FolderOptions, C>} */ (
         Object.freeze(
             /** @type {any} */ ({
                 ...options,

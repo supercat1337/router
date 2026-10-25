@@ -1,6 +1,6 @@
 {
     "name": "@supercat1337/router",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "description": "Synchronous state-relative router for SPA and SSR over a tree of JS objects.",
     "author": "Albert Bazaleev",
     "license": "MIT",

@@ -86,7 +86,7 @@ export interface FileNode<M = FileMeta> {
 }
 
 /**
- * An interior node created by `folder(options, children)`. Branded and
+ * An interior node created by `folder(children, options?)`. Branded and
  * frozen; not constructible outside `folder()`.
  *
  * @public
@@ -156,10 +156,16 @@ export type RouteNameOf<R> = R extends RouterMap<infer N> ? N : string;
  */
 export interface NotFoundContext {
     /** Router-relative URL that failed to match. */
-    url: string;
+    readonly url: string;
 
     /** Partial chain of matched nodes; may be empty. */
-    chain: readonly Node[];
+    readonly chain: readonly Node[];
+
+    /** Decoded query params of the URL that failed to match. */
+    readonly search: Readonly<Record<string, string>>;
+
+    /** Decoded path params along `chain`. */
+    readonly partialParams: Readonly<Record<string, string>>;
 }
 
 /**
@@ -322,6 +328,13 @@ export interface Snapshot {
      * error. Source for `urlPrefix(:name)` in chain comparison.
      */
     readonly partialParams: Readonly<Record<string, string>>;
+
+    /**
+     * Decoded query params. For matched/notFound — parsed from the committed
+     * URL. For error — inherited from the previous committed snapshot
+     * (consistent with `chain` / `map` / `leaf`).
+     */
+    readonly search: Readonly<Record<string, string>>;
 
     /** RRU at commit time: `normalizeRRU(adapter.read())`. */
     readonly url: string;

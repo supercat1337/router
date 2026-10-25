@@ -282,21 +282,22 @@ export declare interface FileNode<M = FileMeta> {
 /**
  * Create a `folder` node.
  *
- * Validates the **subtree** — `options` shape, `notFound` (best-effort
- * sync check), `children` keys, `index`/`*` must be files, `:name`
- * collisions. Tree-wide invariants are enforced by `createMap`.
+ * Validates the **subtree** — `children` shape and keys (literal, `:name`,
+ * `*`, `index`), `index`/`*` must be files, `:name` collisions; and
+ * `options.notFound` (best-effort sync check). Tree-wide invariants are
+ * enforced by `createMap`.
  *
  * @public
  */
-export declare function folder<const O extends FolderOptions, const C extends Children>(
-options: O,
-children: C
-): FolderNode<O, C>;
+export declare function folder<const C extends Children>(
+children: C,
+options?: FolderOptions
+): FolderNode<FolderOptions, C>;
 
 declare const FOLDER_BRAND: unique symbol;
 
 /**
- * An interior node created by `folder(options, children)`. Branded and
+ * An interior node created by `folder(children, options?)`. Branded and
  * frozen; not constructible outside `folder()`.
  *
  * @public
@@ -609,9 +610,13 @@ export declare function normalizeRRU(url: string): string;
  */
 export declare interface NotFoundContext {
     /** Router-relative URL that failed to match. */
-    url: string;
+    readonly url: string;
     /** Partial chain of matched nodes; may be empty. */
-    chain: readonly Node_2[];
+    readonly chain: readonly Node_2[];
+    /** Decoded query params of the URL that failed to match. */
+    readonly search: Readonly<Record<string, string>>;
+    /** Decoded path params along `chain`. */
+    readonly partialParams: Readonly<Record<string, string>>;
 }
 
 /**
@@ -815,6 +820,12 @@ export declare interface Snapshot {
      * error. Source for `urlPrefix(:name)` in chain comparison.
      */
     readonly partialParams: Readonly<Record<string, string>>;
+    /**
+     * Decoded query params. For matched/notFound — parsed from the committed
+     * URL. For error — inherited from the previous committed snapshot
+     * (consistent with `chain` / `map` / `leaf`).
+     */
+    readonly search: Readonly<Record<string, string>>;
     /** RRU at commit time: `normalizeRRU(adapter.read())`. */
     readonly url: string;
     /**

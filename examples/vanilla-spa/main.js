@@ -26,7 +26,6 @@ const userMap = createMap(
         login: file({ name: 'login', title: 'Login' }),
         about: file({ name: 'about', title: 'About' }),
         profile: folder(
-            {},
             {
                 index: file({ name: 'profile', title: 'Your profile' }),
                 edit: file({ name: 'profileEdit', title: 'Edit profile' }),

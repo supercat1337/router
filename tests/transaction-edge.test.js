@@ -51,7 +51,7 @@ test('popstate during transaction is suppressed', t => {
     const map = createMap(
         {
             login: file({ name: 'login' }),
-            users: folder({}, { ':id': file({ name: 'u' }) }),
+            users: folder( { ':id': file({ name: 'u' }) }),
         },
         { notFound: nf }
     );

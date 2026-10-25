@@ -94,6 +94,8 @@ export function runTransaction(source, inputUrl, env) {
     let params = {};
     /** @type {Record<string, string>} */
     let partialParams = {};
+    /** @type {Record<string, string>} */
+    let search = {};
     /** @type {'matched' | 'notFound'} */
     let status = 'matched';
     /** @type {unknown} */
@@ -158,6 +160,8 @@ export function runTransaction(source, inputUrl, env) {
                 result = matchResult.handler({
                     url: matchResult.url,
                     chain: matchResult.chain,
+                    search: matchResult.search,
+                    partialParams: matchResult.partialParams,
                 });
             } catch (e) {
                 return handleError(
@@ -225,6 +229,7 @@ export function runTransaction(source, inputUrl, env) {
             chain = matchResult.chain;
             params = {};
             partialParams = matchResult.partialParams;
+            search = matchResult.search;
             notFoundResult = result;
             break;
         }
@@ -233,6 +238,7 @@ export function runTransaction(source, inputUrl, env) {
         chain = matchResult.chain;
         params = matchResult.params;
         partialParams = {};
+        search = matchResult.search;
         break;
     }
 
@@ -264,6 +270,7 @@ export function runTransaction(source, inputUrl, env) {
         params,
         partialParams,
         committedUrl,
+        search,
         notFoundResult
     );
     env.commitSnapshot(snapshot);

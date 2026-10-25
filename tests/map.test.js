@@ -105,13 +105,13 @@ test('map.url: literal route', t => {
 });
 
 test('map.url: :name route with params', t => {
-    const m = createMap({ users: folder({}, { ':id': file({ name: 'user' }) }) }, { notFound: nf });
+    const m = createMap({ users: folder( { ':id': file({ name: 'user' }) }) }, { notFound: nf });
     t.is(m.url('user', { id: '5' }), '/users/5');
 });
 
 test('map.url: index route', t => {
     const m = createMap(
-        { admin: folder({}, { index: file({ name: 'adminHome' }) }) },
+        { admin: folder( { index: file({ name: 'adminHome' }) }) },
         { notFound: nf }
     );
     t.is(m.url('adminHome'), '/admin');
@@ -123,12 +123,12 @@ test('map.url: unknown name throws TypeError', t => {
 });
 
 test('map.url: :name without params throws TypeError', t => {
-    const m = createMap({ users: folder({}, { ':id': file({ name: 'user' }) }) }, { notFound: nf });
+    const m = createMap({ users: folder( { ':id': file({ name: 'user' }) }) }, { notFound: nf });
     t.throws(() => m.url('user'), { instanceOf: TypeError });
 });
 
 test('map.url: :name with empty value throws TypeError', t => {
-    const m = createMap({ users: folder({}, { ':id': file({ name: 'user' }) }) }, { notFound: nf });
+    const m = createMap({ users: folder( { ':id': file({ name: 'user' }) }) }, { notFound: nf });
     t.throws(() => m.url('user', { id: '' }), { instanceOf: TypeError });
 });
 
@@ -173,7 +173,6 @@ test('map.match: static beats :name', t => {
     const m = createMap(
         {
             users: folder(
-                {},
                 {
                     new: file({ name: 'newUser' }),
                     ':id': file({ name: 'user' }),
@@ -190,7 +189,7 @@ test('map.match: static beats :name', t => {
 });
 
 test('map.match: :name param is decoded', t => {
-    const m = createMap({ users: folder({}, { ':id': file({ name: 'user' }) }) }, { notFound: nf });
+    const m = createMap({ users: folder( { ':id': file({ name: 'user' }) }) }, { notFound: nf });
     const r = m.match('/users/a%2Fb');
     t.is(r.status, 'matched');
     if (r.status === 'matched') {

@@ -91,16 +91,17 @@ export declare function file<const M extends FileMeta>(meta: M): FileNode<M>;
 /**
  * Create a `folder` node.
  *
- * Validates the **subtree** — `options` shape, `notFound` (best-effort
- * sync check), `children` keys, `index`/`*` must be files, `:name`
- * collisions. Tree-wide invariants are enforced by `createMap`.
+ * Validates the **subtree** — `children` shape and keys (literal, `:name`,
+ * `*`, `index`), `index`/`*` must be files, `:name` collisions; and
+ * `options.notFound` (best-effort sync check). Tree-wide invariants are
+ * enforced by `createMap`.
  *
  * @public
  */
-export declare function folder<const O extends FolderOptions, const C extends Children>(
-    options: O,
-    children: C
-): FolderNode<O, C>;
+export declare function folder<const C extends Children>(
+    children: C,
+    options?: FolderOptions
+): FolderNode<FolderOptions, C>;
 
 /**
  * Create an immutable router map.

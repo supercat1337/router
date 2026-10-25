@@ -48,13 +48,10 @@ flat.url('typo');
 
 const nested = createMap(
     {
-        admin: folder(
-            {},
-            {
-                index: file({ name: 'adminHome' }),
-                users: folder({}, { ':id': file({ name: 'adminUser' }) }),
-            }
-        ),
+        admin: folder({
+            index: file({ name: 'adminHome' }),
+            users: folder({ ':id': file({ name: 'adminUser' }) }),
+        }),
         login: file({ name: 'login' }),
     },
     { notFound: nf }

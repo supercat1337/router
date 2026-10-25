@@ -36,26 +36,25 @@ const home = file({ name: 'home', title: 'Home', layout: 'main' });
 - **Do not** reuse a `name` — throws `MapValidationError` with code `name-duplicate`.
 - The `name` literal is preserved by `file<const M>` — this feeds `RouteNames<T>` in `createMap`.
 
-#### `folder(options, children) → FolderNode`
+#### `folder(children, options?) → FolderNode`
 
-Creates a frozen, branded interior node. `options.notFound` is optional; when omitted, the nearest ancestor with `notFound` handles the miss, up to `map.notFound`.
+Creates a frozen, branded interior node. `options` is optional (default `{}`). `options.notFound` is optional; when omitted, the nearest ancestor with `notFound` handles the miss, up to `map.notFound`.
 
 ```js
 const admin = folder(
-    { notFound: () => ({ view: 'adminNF' }) },
     {
         index: file({ name: 'adminHome' }), // /admin
-        users: folder(
-            {},
-            {
-                ':id': file({ name: 'adminUser' }), // /admin/users/:id
-            }
-        ),
-    }
+        users: folder({
+            ':id': file({ name: 'adminUser' }), // /admin/users/:id
+        }),
+    },
+    { notFound: () => ({ view: 'adminNF' }) }
 );
 ```
 
 - **Key rules:** `index` and `*` must be files; only one `:name` per level; children must be non-empty.
+- **Do not** pass `options` first — the signature is `folder(children, options?)`. Passing `{}` first by habit lands you in "children must be non-empty".
+- **Do not** pass an empty `options` — omit the second argument entirely: `folder({ ... })`, not `folder({ ... }, {})`.
 - **Do not** call `folder` with an empty `children` object — throws `TypeError`.
 
 #### `redirect(url) → RedirectResult`
@@ -86,13 +85,21 @@ const guard = createGuardLayer({
 Validates tree-wide invariants and returns a frozen `RouterMap`. `options.notFound` is **mandatory**.
 
 ```js
-const map = createMap(
+// With local notFound — the options argument is present.
+const admin = folder(
     {
-        login: file({ name: 'login' }),
-        admin: folder({}, { index: file({ name: 'adminHome' }) }),
+        index: file({ name: 'adminHome' }), // /admin
+        users: folder({
+            ':id': file({ name: 'adminUser' }), // /admin/users/:id
+        }),
     },
-    { notFound: () => ({ view: '404' }) }
+    { notFound: () => ({ view: 'adminNF' }) }
 );
+
+// Without local notFound — options omitted entirely, inherits map.notFound.
+const account = folder({
+    profile: file({ name: 'accountProfile' }), // /account/profile
+});
 ```
 
 `RouteName` is inferred from the data literal via `RouteNames<T>`. So `map.url("adminHome")` completes and `map.url("adminHme")` is a compile error — provided the data literal is written inline (see [Type support](#type-support)).

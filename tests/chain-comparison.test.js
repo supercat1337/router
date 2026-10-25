@@ -42,13 +42,13 @@ test('switching map without RRU change → no leave/enter', t => {
 test(':id=5 ↔ literal 5 in different maps → no leave/enter', t => {
     const mapA = createMap(
         {
-            users: folder({}, { ':id': file({ name: 'user' }) }),
+            users: folder( { ':id': file({ name: 'user' }) }),
         },
         { notFound: nf }
     );
     const mapB = createMap(
         {
-            users: folder({}, { 5: file({ name: 'user' }) }),
+            users: folder( { 5: file({ name: 'user' }) }),
         },
         { notFound: nf }
     );
@@ -75,7 +75,7 @@ test(':id=5 ↔ literal 5 in different maps → no leave/enter', t => {
 
 test('changing :id value → leave + enter', t => {
     const map = createMap(
-        { users: folder({}, { ':id': file({ name: 'user' }) }) },
+        { users: folder( { ':id': file({ name: 'user' }) }) },
         { notFound: nf }
     );
     const adapter = createMemoryAdapter('/users/5');
@@ -99,10 +99,9 @@ test('nested chain: only divergent suffix in leave/enter', t => {
     const map = createMap(
         {
             admin: folder(
-                {},
                 {
-                    users: folder({}, { ':id': file({ name: 'user' }) }),
-                    reports: folder({}, { index: file({ name: 'reports' }) }),
+                    users: folder( { ':id': file({ name: 'user' }) }),
+                    reports: folder( { index: file({ name: 'reports' }) }),
                 }
             ),
         },

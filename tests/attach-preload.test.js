@@ -22,7 +22,7 @@ function setup() {
     const map = createMap(
         {
             login: file({ name: 'login', load: () => Promise.resolve('login') }),
-            users: folder({}, {
+            users: folder( {
                 ':id': file({ name: 'user', load: () => Promise.resolve('user') }),
             }),
         },

@@ -217,8 +217,10 @@ export { Node_2 as Node }
 
 // @public
 export interface NotFoundContext {
-    chain: readonly Node_2[];
-    url: string;
+    readonly chain: readonly Node_2[];
+    readonly partialParams: Readonly<Record<string, string>>;
+    readonly search: Readonly<Record<string, string>>;
+    readonly url: string;
 }
 
 // @public
@@ -303,6 +305,7 @@ export interface Snapshot {
     readonly notFoundResult?: unknown;
     readonly params: Readonly<Record<string, string>>;
     readonly partialParams: Readonly<Record<string, string>>;
+    readonly search: Readonly<Record<string, string>>;
     readonly status: 'matched' | 'notFound' | 'error';
     readonly url: string;
 }

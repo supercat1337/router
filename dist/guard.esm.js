@@ -253,6 +253,7 @@ function commonChainPrefix(prev, next, getKeysMap) {
  * @param {Record<string, string>} params
  * @param {Record<string, string>} partialParams
  * @param {string} url
+ * @param {Record<string, string>} search
  * @param {unknown} [notFoundResult]
  * @returns {Snapshot}
  */
@@ -264,11 +265,13 @@ function buildSnapshot(
     params,
     partialParams,
     url,
+    search,
     notFoundResult
 ) {
     const frozenChain = Object.freeze([...chain]);
     const frozenParams = Object.freeze({ ...params });
     const frozenPartialParams = Object.freeze({ ...partialParams });
+    const frozenSearch = Object.freeze({ ...search });
     /** @type {any} */
     const snap = {
         navigationId,
@@ -277,6 +280,7 @@ function buildSnapshot(
         chain: frozenChain,
         params: frozenParams,
         partialParams: frozenPartialParams,
+        search: frozenSearch,
         url,
         leaf: frozenChain.length > 0 ? frozenChain[frozenChain.length - 1] : undefined,
     };
@@ -313,6 +317,7 @@ function buildErrorSnapshot(navigationId, prev, type, extra, url) {
             chain: prev.chain, // already frozen
             params: Object.freeze({}),
             partialParams: chainParams(prev), // already frozen (prev.params / prev.partialParams)
+            search: prev.search ?? Object.freeze({}),
             url,
             leaf: prev.leaf,
             error,
@@ -412,6 +417,8 @@ function runTransaction(source, inputUrl, env) {
     let params = {};
     /** @type {Record<string, string>} */
     let partialParams = {};
+    /** @type {Record<string, string>} */
+    let search = {};
     /** @type {'matched' | 'notFound'} */
     let status = 'matched';
     /** @type {unknown} */
@@ -476,6 +483,8 @@ function runTransaction(source, inputUrl, env) {
                 result = matchResult.handler({
                     url: matchResult.url,
                     chain: matchResult.chain,
+                    search: matchResult.search,
+                    partialParams: matchResult.partialParams,
                 });
             } catch (e) {
                 return handleError(
@@ -543,6 +552,7 @@ function runTransaction(source, inputUrl, env) {
             chain = matchResult.chain;
             params = {};
             partialParams = matchResult.partialParams;
+            search = matchResult.search;
             notFoundResult = result;
             break;
         }
@@ -551,6 +561,7 @@ function runTransaction(source, inputUrl, env) {
         chain = matchResult.chain;
         params = matchResult.params;
         partialParams = {};
+        search = matchResult.search;
         break;
     }
 
@@ -582,6 +593,7 @@ function runTransaction(source, inputUrl, env) {
         params,
         partialParams,
         committedUrl,
+        search,
         notFoundResult
     );
     env.commitSnapshot(snapshot);

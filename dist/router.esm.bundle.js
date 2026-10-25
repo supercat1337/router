@@ -27,51 +27,51 @@ function file(meta) {
     )
   );
 }
-function folder(options, children) {
+function folder(children, options = {}) {
   if (options === null || typeof options !== "object" || Array.isArray(options)) {
-    throw new TypeError("folder(options, children): options must be a plain object");
+    throw new TypeError("folder(children, options): options must be a plain object");
   }
   if (options.notFound !== void 0 && typeof options.notFound !== "function") {
     throw new TypeError(
-      "folder(options, children): options.notFound must be a function when provided"
+      "folder(children, options): options.notFound must be a function when provided"
     );
   }
   if (options.notFound !== void 0 && isAsyncFunction(options.notFound)) {
-    throw new TypeError("folder(options, children): options.notFound must be synchronous");
+    throw new TypeError("folder(children, options): options.notFound must be synchronous");
   }
   if (children === null || typeof children !== "object" || Array.isArray(children)) {
-    throw new TypeError("folder(options, children): children must be a plain object");
+    throw new TypeError("folder(children, options): children must be a plain object");
   }
   const keys = Object.keys(children);
   if (keys.length === 0) {
-    throw new TypeError("folder(options, children): children must be non-empty");
+    throw new TypeError("folder(children, options): children must be non-empty");
   }
   let hasParamKey = false;
   for (const key of keys) {
     const parsed = parseKey(key);
     if (parsed === null) {
-      throw new TypeError(`folder(options, children): invalid key ${JSON.stringify(key)}`);
+      throw new TypeError(`folder(children, options): invalid key ${JSON.stringify(key)}`);
     }
     const child = children[key];
     if (parsed.kind === "wildcard" && !isFile(child)) {
       throw new TypeError(
-        `folder(options, children): '*' must be a file, got folder at ${JSON.stringify(key)}`
+        `folder(children, options): '*' must be a file, got folder at ${JSON.stringify(key)}`
       );
     }
     if (parsed.kind === "index" && !isFile(child)) {
-      throw new TypeError("folder(options, children): 'index' must be a file");
+      throw new TypeError("folder(children, options): 'index' must be a file");
     }
     if (parsed.kind === "param") {
       if (hasParamKey) {
         throw new TypeError(
-          `folder(options, children): only one ':name' key per level is allowed, got ${JSON.stringify(key)} as second`
+          `folder(children, options): only one ':name' key per level is allowed, got ${JSON.stringify(key)} as second`
         );
       }
       hasParamKey = true;
     }
   }
   return (
-    /** @type {import('./types.js').FolderNode<O, C>} */
+    /** @type {import('./types.js').FolderNode<FolderOptions, C>} */
     Object.freeze(
       /** @type {any} */
       {
@@ -1071,10 +1071,11 @@ function commonChainPrefix(prev, next, getKeysMap2) {
   }
   return n;
 }
-function buildSnapshot(navigationId, map, status, chain, params, partialParams, url, notFoundResult) {
+function buildSnapshot(navigationId, map, status, chain, params, partialParams, url, search, notFoundResult) {
   const frozenChain = Object.freeze([...chain]);
   const frozenParams = Object.freeze({ ...params });
   const frozenPartialParams = Object.freeze({ ...partialParams });
+  const frozenSearch = Object.freeze({ ...search });
   const snap = {
     navigationId,
     map,
@@ -1082,6 +1083,7 @@ function buildSnapshot(navigationId, map, status, chain, params, partialParams, 
     chain: frozenChain,
     params: frozenParams,
     partialParams: frozenPartialParams,
+    search: frozenSearch,
     url,
     leaf: frozenChain.length > 0 ? frozenChain[frozenChain.length - 1] : void 0
   };
@@ -1114,6 +1116,7 @@ function buildErrorSnapshot(navigationId, prev, type, extra, url) {
       params: Object.freeze({}),
       partialParams: chainParams(prev),
       // already frozen (prev.params / prev.partialParams)
+      search: prev.search ?? Object.freeze({}),
       url,
       leaf: prev.leaf,
       error
@@ -1146,6 +1149,7 @@ function runTransaction(source, inputUrl, env) {
   let chain = [];
   let params = {};
   let partialParams = {};
+  let search = {};
   let status = "matched";
   let notFoundResult;
   for (; ; ) {
@@ -1201,7 +1205,9 @@ function runTransaction(source, inputUrl, env) {
       try {
         result = matchResult.handler({
           url: matchResult.url,
-          chain: matchResult.chain
+          chain: matchResult.chain,
+          search: matchResult.search,
+          partialParams: matchResult.partialParams
         });
       } catch (e) {
         return handleError(
@@ -1269,6 +1275,7 @@ function runTransaction(source, inputUrl, env) {
       chain = matchResult.chain;
       params = {};
       partialParams = matchResult.partialParams;
+      search = matchResult.search;
       notFoundResult = result;
       break;
     }
@@ -1276,6 +1283,7 @@ function runTransaction(source, inputUrl, env) {
     chain = matchResult.chain;
     params = matchResult.params;
     partialParams = {};
+    search = matchResult.search;
     break;
   }
   let committedUrl;
@@ -1301,6 +1309,7 @@ function runTransaction(source, inputUrl, env) {
     params,
     partialParams,
     committedUrl,
+    search,
     notFoundResult
   );
   env.commitSnapshot(snapshot);

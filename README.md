@@ -255,25 +255,40 @@ import { createMap, file, folder } from '@supercat1337/router';
 
 const map = createMap(
     {
+        login: file({ name: 'login' }),
+
+        // Admin — local 404 for unknown admin URLs.
         admin: folder(
-            { notFound: () => ({ view: 'adminNotFound' }) },
             {
                 index: file({ name: 'adminHome' }), // /admin
-                users: folder(
-                    {}, // no local notFound — inherits from admin
-                    {
-                        index: file({ name: 'adminUsers' }), // /admin/users
-                        ':id': file({ name: 'adminUser' }), // /admin/users/:id
-                    }
-                ),
-            }
+                users: folder({
+                    index: file({ name: 'adminUsers' }), // /admin/users
+                    ':id': file({ name: 'adminUser' }), // /admin/users/:id
+                }),
+                reports: folder({
+                    ':year': file({ name: 'adminReport' }), // /admin/reports/:year
+                }),
+            },
+            { notFound: () => ({ view: 'adminNotFound' }) }
         ),
+
+        // Account — no local notFound, inherits map.notFound.
+        account: folder({
+            profile: file({ name: 'accountProfile' }), // /account/profile
+            settings: file({ name: 'accountSettings' }), // /account/settings
+        }),
     },
     { notFound: () => ({ view: '404' }) }
 );
 ```
 
-`folder(options, children)` — `options.notFound` is optional. When omitted (empty `{}`), the nearest ancestor with a `notFound` handles the miss, up to `map.notFound`. The example has three levels of fallback: `map.notFound` (root), `admin.notFound` (local override), and `users` inheriting from `admin`.
+`folder(children, options?)` — content first, matching `createMap(data, options)` and `attachLinks(router, options)`. `options.notFound` is optional; when omitted, the nearest ancestor with a `notFound` handles the miss, up to `map.notFound`. Three fallback behaviors are visible side by side:
+
+- `/admin/users/xyz` → `adminNotFound` (local override on `admin`; `users` inherits from `admin`)
+- `/account/xyz` → `404` (inherited from `map.notFound`; `account` has no local `notFound`)
+- `/xyz` → `404` (root)
+
+`users`, `reports`, and `account` pass **no** second argument — `folder({ ... })` is enough. Only `admin` needs a local `notFound`, so only `admin` has options.
 
 ### Maps are independent
 
@@ -339,7 +354,7 @@ Two snapshot fields are app-owned and **not** frozen:
 const map = createMap(
     {
         login: file({ name: 'login' }),
-        users: folder({}, { ':id': file({ name: 'user' }) }),
+        users: folder({ ':id': file({ name: 'user' }) }),
     },
     { notFound }
 );
@@ -473,13 +488,10 @@ They are distinct from the core's `NavigationErrorType`: the core does not know 
 ```js
 const map = createMap(
     {
-        dashboard: folder(
-            {},
-            {
-                index: file({ name: 'dashboardHome', layout: 'dashboard' }),
-                settings: file({ name: 'dashboardSettings', layout: 'dashboard' }),
-            }
-        ),
+        dashboard: folder({
+            index: file({ name: 'dashboardHome', layout: 'dashboard' }),
+            settings: file({ name: 'dashboardSettings', layout: 'dashboard' }),
+        }),
         login: file({ name: 'login' }), // no layout → default
     },
     { notFound: () => ({ view: '404' }) }
@@ -543,12 +555,9 @@ const map = createMap(
     {
         login: file({ name: 'login', load: () => import('./views/login.js') }),
         profile: file({ name: 'profile', load: () => import('./views/profile.js') }),
-        admin: folder(
-            {},
-            {
-                users: file({ name: 'adminUsers', load: () => import('./views/admin-users.js') }),
-            }
-        ),
+        admin: folder({
+            users: file({ name: 'adminUsers', load: () => import('./views/admin-users.js') }),
+        }),
     },
     { notFound }
 );

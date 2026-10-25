@@ -27,10 +27,9 @@ test('hasRoute: finds nested route names', t => {
     const m = createMap(
         {
             admin: folder(
-                {},
                 {
                     index: file({ name: 'adminHome' }),
-                    users: folder({}, { ':id': file({ name: 'adminUser' }) }),
+                    users: folder( { ':id': file({ name: 'adminUser' }) }),
                 }
             ),
         },
@@ -42,7 +41,7 @@ test('hasRoute: finds nested route names', t => {
 });
 
 test('hasRoute: true for route requiring params (params not checked)', t => {
-    const m = createMap({ users: folder({}, { ':id': file({ name: 'user' }) }) }, { notFound: nf });
+    const m = createMap({ users: folder( { ':id': file({ name: 'user' }) }) }, { notFound: nf });
     t.true(hasRoute(m, 'user'));
     // And url() still requires params — hasRoute was honest about existence only.
     t.throws(() => m.url('user'), { instanceOf: TypeError });
@@ -99,7 +98,7 @@ test('hasRoute: agrees with url() for all reachable names', t => {
     const m = createMap(
         {
             login: file({ name: 'login' }),
-            users: folder({}, { ':id': file({ name: 'user' }) }),
+            users: folder( { ':id': file({ name: 'user' }) }),
         },
         { notFound: nf }
     );

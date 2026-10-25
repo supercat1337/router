@@ -10,8 +10,8 @@ const nf = () => null;
 test('url: skips folders where target not found', t => {
     const m = createMap(
         {
-            a: folder({}, { x: file({ name: 'a-x' }) }),
-            b: folder({}, { y: file({ name: 'b-y' }) }),
+            a: folder( { x: file({ name: 'a-x' }) }),
+            b: folder( { y: file({ name: 'b-y' }) }),
         },
         { notFound: nf }
     );
@@ -22,7 +22,6 @@ test('url: finds leaf in second branch of first folder', t => {
     const m = createMap(
         {
             a: folder(
-                {},
                 {
                     x: file({ name: 'a-x' }),
                     y: file({ name: 'a-y' }),

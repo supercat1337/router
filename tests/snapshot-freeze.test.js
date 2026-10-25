@@ -12,7 +12,7 @@ const nf = () => null;
 test('Snapshot is deeply frozen', t => {
     const map = createMap(
         {
-            users: folder({}, { ':id': file({ name: 'user' }) }),
+            users: folder( { ':id': file({ name: 'user' }) }),
         },
         { notFound: nf }
     );
@@ -32,7 +32,7 @@ test('Snapshot is deeply frozen', t => {
 
 test('Snapshot.leaf — matched', t => {
     const map = createMap(
-        { users: folder({}, { ':id': file({ name: 'user' }) }) },
+        { users: folder( { ':id': file({ name: 'user' }) }) },
         { notFound: nf }
     );
     const adapter = createMemoryAdapter('/users/5');
@@ -79,4 +79,5 @@ test('Snapshot.error is deeply frozen', t => {
     t.true(Object.isFrozen(snap.error));
     t.true(Object.isFrozen(snap.error?.partialChain));
     t.true(Object.isFrozen(snap.error?.partialParams));
+    t.true(Object.isFrozen(snap.search));
 });

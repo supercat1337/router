@@ -18,7 +18,7 @@ test('root / is notFound with empty chain', t => {
 });
 
 test(':name does not match empty segment', t => {
-    const m = createMap({ users: folder({}, { ':id': file({ name: 'u' }) }) }, { notFound: nf });
+    const m = createMap({ users: folder({ ':id': file({ name: 'u' }) }) }, { notFound: nf });
     t.is(m.match('/users//').status, 'notFound');
     t.is(m.match('//users').status, 'notFound');
     t.is(m.match('///a').status, 'notFound');
@@ -63,7 +63,7 @@ test('invalid percent in segment → :name skipped, * still considered', t => {
     // `%` alone throws URIError inside decodeURIComponent. `tryDecode`
     // returns null; the segment cannot match literal or `:name`. `*`
     // does not decode, so it still matches.
-    const m = createMap({ users: folder({}, { ':id': file({ name: 'u' }) }) }, { notFound: nf });
+    const m = createMap({ users: folder({ ':id': file({ name: 'u' }) }) }, { notFound: nf });
     t.is(m.match('/users/%').status, 'notFound');
 
     const m2 = createMap({ '*': file({ name: 'any' }) }, { notFound: nf });
@@ -71,7 +71,7 @@ test('invalid percent in segment → :name skipped, * still considered', t => {
 });
 
 test('%35 and 5 decode to same params but are different RRU', t => {
-    const m = createMap({ users: folder({}, { ':id': file({ name: 'u' }) }) }, { notFound: nf });
+    const m = createMap({ users: folder({ ':id': file({ name: 'u' }) }) }, { notFound: nf });
     const r1 = m.match('/users/%35');
     const r2 = m.match('/users/5');
     t.is(r1.status, 'matched');
@@ -97,7 +97,6 @@ test('static file with trailing segments → notFound (no backtracking)', t => {
     const m = createMap(
         {
             users: folder(
-                {},
                 {
                     new: file({ name: 'newUser' }),
                     ':id': file({ name: 'user' }),
@@ -119,9 +118,8 @@ test('partial chain params decoded during notFound', t => {
     const m = createMap(
         {
             admin: folder(
-                {},
                 {
-                    users: folder({}, { ':id': file({ name: 'user' }) }),
+                    users: folder({ ':id': file({ name: 'user' }) }),
                 }
             ),
         },
@@ -142,10 +140,7 @@ test('nearest folder.notFound wins over map.notFound', t => {
     const innerNf = () => 'inner';
     const m = createMap(
         {
-            admin: folder(
-                { notFound: innerNf },
-                { users: folder({}, { ':id': file({ name: 'u' }) }) }
-            ),
+            admin: folder({ users: folder({ ':id': file({ name: 'u' }) }) }, { notFound: innerNf }),
         },
         { notFound: mapNf }
     );

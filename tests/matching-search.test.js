@@ -42,7 +42,7 @@ test('match: encoded values decoded', t => {
 });
 
 test('match: search independent from path params', t => {
-    const m = createMap({ users: folder({}, { ':id': file({ name: 'user' }) }) }, { notFound: nf });
+    const m = createMap({ users: folder( { ':id': file({ name: 'user' }) }) }, { notFound: nf });
     const r = m.match('/users/5?tab=profile');
     t.is(r.status, 'matched');
     if (r.status === 'matched') {

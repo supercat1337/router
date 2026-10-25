@@ -128,10 +128,10 @@ export interface FileNode<M = FileMeta> {
 }
 
 // @public
-export function folder<const O extends FolderOptions, const C extends Children>(
-options: O,
-children: C
-): FolderNode<O, C>;
+export function folder<const C extends Children>(
+children: C,
+options?: FolderOptions
+): FolderNode<FolderOptions, C>;
 
 // @public
 export interface FolderNode<O = FolderOptions, C = Children> {
@@ -265,8 +265,10 @@ export function normalizeRRU(url: string): string;
 
 // @public
 export interface NotFoundContext {
-    chain: readonly Node_2[];
-    url: string;
+    readonly chain: readonly Node_2[];
+    readonly partialParams: Readonly<Record<string, string>>;
+    readonly search: Readonly<Record<string, string>>;
+    readonly url: string;
 }
 
 // @public
@@ -354,6 +356,7 @@ export interface Snapshot {
     readonly notFoundResult?: unknown;
     readonly params: Readonly<Record<string, string>>;
     readonly partialParams: Readonly<Record<string, string>>;
+    readonly search: Readonly<Record<string, string>>;
     readonly status: 'matched' | 'notFound' | 'error';
     readonly url: string;
 }

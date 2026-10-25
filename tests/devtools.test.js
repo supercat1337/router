@@ -14,7 +14,7 @@ function simpleMap() {
     return createMap(
         {
             login: file({ name: "login" }),
-            users: folder({}, { ":id": file({ name: "user" }) }),
+            users: folder( { ":id": file({ name: "user" }) }),
         },
         { notFound: nf },
     );

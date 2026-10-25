@@ -62,7 +62,7 @@ test('chainParams: notFound uses partialParams', t => {
 
 test('urlPrefixes: literal chain', t => {
     const map = createMap(
-        { users: folder({}, { profile: file({ name: 'p' }) }) },
+        { users: folder( { profile: file({ name: 'p' }) }) },
         { notFound: nf }
     );
     const r = map.match('/users/profile');
@@ -81,7 +81,7 @@ test('urlPrefixes: literal chain', t => {
 });
 
 test('urlPrefixes: :name decoded', t => {
-    const map = createMap({ users: folder({}, { ':id': file({ name: 'u' }) }) }, { notFound: nf });
+    const map = createMap({ users: folder( { ':id': file({ name: 'u' }) }) }, { notFound: nf });
     const r = map.match('/users/%35');
     if (r.status !== 'matched') return t.fail();
     const snap = {
@@ -133,7 +133,7 @@ test('urlPrefixes: * strips query', t => {
 
 test('urlPrefixes: index = parent prefix', t => {
     const map = createMap(
-        { admin: folder({}, { index: file({ name: 'adminHome' }) }) },
+        { admin: folder( { index: file({ name: 'adminHome' }) }) },
         { notFound: nf }
     );
     const r = map.match('/admin');
@@ -168,7 +168,7 @@ test('urlPrefixes: node not in keysMap → parent prefix', t => {
 });
 
 test('commonChainPrefix: shared root', t => {
-    const map = createMap({ users: folder({}, { ':id': file({ name: 'u' }) }) }, { notFound: nf });
+    const map = createMap({ users: folder( { ':id': file({ name: 'u' }) }) }, { notFound: nf });
     const r1 = map.match('/users/5');
     const r2 = map.match('/users/6');
     if (r1.status !== 'matched' || r2.status !== 'matched') return t.fail();
@@ -197,13 +197,13 @@ test('commonChainPrefix: shared root', t => {
 
 test('buildSnapshot: notFound attaches notFoundResult', t => {
     const map = createMap({}, { notFound: nf });
-    const snap = buildSnapshot(1, map, 'notFound', [], {}, {}, '/x', 'render');
+    const snap = buildSnapshot(1, map, 'notFound', [], {}, {}, '/x', {}, 'render');
     t.is(snap.notFoundResult, 'render');
 });
 
 test('buildSnapshot: matched skips notFoundResult', t => {
     const map = createMap({}, { notFound: nf });
-    const snap = buildSnapshot(1, map, 'matched', [], {}, {}, '/x');
+    const snap = buildSnapshot(1, map, 'matched', [], {}, {}, '/x', {});
     t.is(snap.notFoundResult, undefined);
 });
 
@@ -218,6 +218,7 @@ test('buildErrorSnapshot: anchored to prev', t => {
         chain: r.chain,
         params: r.params,
         partialParams: {},
+        search: { tab: '1' },
         url: '/login',
         leaf: leafOf(r.chain),
     };
@@ -238,4 +239,5 @@ test('buildErrorSnapshot: anchored to prev', t => {
     t.is(err.chain, prev.chain);
     t.deepEqual(err.params, {});
     t.deepEqual(err.partialParams, prev.params);
+    t.deepEqual(err.search, { tab: '1' });
 });

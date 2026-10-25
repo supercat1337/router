@@ -87,6 +87,7 @@ export function commonChainPrefix(prev, next, getKeysMap) {
  * @param {Record<string, string>} params
  * @param {Record<string, string>} partialParams
  * @param {string} url
+ * @param {Record<string, string>} search
  * @param {unknown} [notFoundResult]
  * @returns {Snapshot}
  */
@@ -98,11 +99,13 @@ export function buildSnapshot(
     params,
     partialParams,
     url,
+    search,
     notFoundResult
 ) {
     const frozenChain = Object.freeze([...chain]);
     const frozenParams = Object.freeze({ ...params });
     const frozenPartialParams = Object.freeze({ ...partialParams });
+    const frozenSearch = Object.freeze({ ...search });
     /** @type {any} */
     const snap = {
         navigationId,
@@ -111,6 +114,7 @@ export function buildSnapshot(
         chain: frozenChain,
         params: frozenParams,
         partialParams: frozenPartialParams,
+        search: frozenSearch,
         url,
         leaf: frozenChain.length > 0 ? frozenChain[frozenChain.length - 1] : undefined,
     };
@@ -147,6 +151,7 @@ export function buildErrorSnapshot(navigationId, prev, type, extra, url) {
             chain: prev.chain, // already frozen
             params: Object.freeze({}),
             partialParams: chainParams(prev), // already frozen (prev.params / prev.partialParams)
+            search: prev.search ?? Object.freeze({}),
             url,
             leaf: prev.leaf,
             error,
