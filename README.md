@@ -28,6 +28,14 @@ Full comparison with TanStack Router, React Router v7, Vue Router — [`docs/com
 
 If none of that applies, keep reading.
 
+## Core vs. ecosystem
+
+Core (`@supercat1337/router`) stays **framework-agnostic and synchronous** — no hooks, no components, no framework-specific imports. Its contract — `(state, url) → map`, atomic transactions, frozen snapshots — does not bend for any framework.
+
+Optional packages (`@supercat1337/router-react`, `-vue`, `-svelte`, `-solid`) add framework-specific ergonomics — `useSnapshot`, `<Link>`, `<NavLink>`, `useParams`, `useBlocker`, `<RouterErrorBoundary>` — **without changing the core contract**. These packages are thin adapters over `router.subscribe` / `getSnapshot` / `adapter.href` / `getChainPrefixes`. The core still has no hooks; the packages are independently versioned, so a React 19.x fix does not force a Vue user to update.
+
+If you want a framework router out of the box — TanStack Router (React), React Router v7 (React), Vue Router (Vue) remain better fits. Choose this router if you need **synchronous state-relative routing** and are prepared for a smaller ecosystem with framework glue.
+
 ## Installation
 
 ```bash

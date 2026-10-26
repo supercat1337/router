@@ -75,7 +75,16 @@ router.navigate('/login').redirectedFrom; // undefined
 ```
 
 - **Multi-hop:** `/a → /b → /c` → `redirectedFrom = '/a'` (the original), `url = '/c'` (the final).
-- **Not for guard redirects** — those commit a new transaction via `router.replace()`. `redirectedFrom` describes a redirect **within** a single transaction.
+- **Not for guard redirects** — those commit a **new** transaction via `router.replace()`, so `redirectedFrom` is `undefined` even though the URL changed.
+
+    ```js
+    await nav.navigate('/a'); // guard returns redirect('/b')
+    router.getSnapshot().url; // '/b'
+    router.getSnapshot().redirectedFrom; // undefined — new transaction, not a redirect within one
+    ```
+
+    `redirectedFrom` describes a redirect **within** a single transaction (a `notFound` handler returning `redirect()`). Guard redirects live **outside** the transaction — the guard layer calls `router.replace(target)`, which starts a fresh transaction with its own `navigationId` and no `redirectedFrom`.
+
 - **Absent on error snapshots** — for `redirect-loop`, use `snapshot.error.path` (the chain of normalized URLs that looped).
 - **Absent on direct notFound** — nothing redirected; the URL just did not match.
 
