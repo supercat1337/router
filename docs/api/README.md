@@ -44,23 +44,24 @@
 
 ### Router methods
 
-| Method                | Signature                  | Notes                                   |
-| :-------------------- | :------------------------- | :-------------------------------------- |
-| `navigate`            | `(url) → Snapshot`         | Sync; history push                      |
-| `replace`             | `(url) → Snapshot`         | Sync; history replace                   |
-| `revalidate`          | `() → Snapshot`            | Always increments `navigationId`        |
-| `back` / `forward`    | `() → void`                | Delegates to `history`                  |
-| `url`                 | `(name, params?) → string` | Narrows `name` to `RouteNameOf<R>`      |
-| `route`               | `(name) → Route`           | Cached, branded, per-map                |
-| `getSnapshot`         | `() → Snapshot`            | Stable reference when unchanged         |
-| `getState`            | `() → S`                   | The `getState` passed to `createRouter` |
-| `isCurrent`           | `(id) → boolean`           | `getSnapshot().navigationId === id`     |
-| `subscribe`           | `(fn) → () => void`        | Fires once per commit                   |
-| `on` / `off` / `once` | `(event, fn) → …`          | Event-specific                          |
+| Method                | Signature                      | Notes                                           |
+| :-------------------- | :----------------------------- | :---------------------------------------------- |
+| `navigate`            | `(url) → Snapshot`             | Sync; history push                              |
+| `replace`             | `(url) → Snapshot`             | Sync; history replace                           |
+| `revalidate`          | `() → Snapshot`                | Always increments `navigationId`                |
+| `prefetch`            | `(url, opts?) → Promise<void>` | Warm a leaf's preload / load without navigating |
+| `back` / `forward`    | `() → void`                    | Delegates to `history`                          |
+| `url`                 | `(name, params?) → string`     | Narrows `name` to `RouteNameOf<R>`              |
+| `route`               | `(name) → Route`               | Cached, branded, per-map                        |
+| `getSnapshot`         | `() → Snapshot`                | Stable reference when unchanged                 |
+| `getState`            | `() → S`                       | The `getState` passed to `createRouter`         |
+| `isCurrent`           | `(id) → boolean`               | `getSnapshot().navigationId === id`             |
+| `subscribe`           | `(fn) → () => void`            | Fires once per commit                           |
+| `on` / `off` / `once` | `(event, fn) → …`              | Event-specific                                  |
 
 ### Types
 
-From the main entry only: `Router`, `RouterMap`, `Snapshot`, `MatchResult`, `EventPayloads`, `UrlAdapter`, `Route`, `RouteNames`, `RouteParamsFor`, `RouteNameOf`, `RouteParamsOf`, `FileMeta`, `FolderOptions`, `FileNode`, `FolderNode`, `Node`, `Children`, `NotFoundContext`, `NotFoundHandler`, `NotFoundResult`, `RedirectResult`, `NavigationType`, `NavigationErrorType`, `MapValidationErrorCode`, `GuardLayer`, `GuardedRouter`, `GuardContext`, `Guard`, `GuardErrorPayload`, `GuardErrorType`, `Decision`, `NavResult`, `CreateRouterOptions`, `CreateGuardLayerOptions`, `CreateGuardedRouterOptions`, `AttachLinksOptions`, `AttachPreloadOptions`, `AttachActiveLinksOptions`, `PreloadContext`, `OnListenerError`, `OnGuardError`, `ResolveMapContext`, `ParamsArgs`, `ParamNameOf`.
+From the main entry only: `Router`, `RouterMap`, `Snapshot`, `MatchResult`, `EventPayloads`, `UrlAdapter`, `Route`, `RouteNames`, `RouteParamsFor`, `RouteNameOf`, `RouteParamsOf`, `FileMeta`, `FolderOptions`, `FileNode`, `FolderNode`, `Node`, `Children`, `NotFoundContext`, `NotFoundHandler`, `NotFoundResult`, `RedirectResult`, `NavigationType`, `NavigationErrorType`, `MapValidationErrorCode`, `GuardLayer`, `GuardedRouter`, `GuardContext`, `Guard`, `GuardErrorPayload`, `GuardErrorType`, `Decision`, `NavResult`, `CreateRouterOptions`, `CreateGuardLayerOptions`, `CreateGuardedRouterOptions`, `AttachLinksOptions`, `AttachPreloadOptions`, `AttachActiveLinksOptions`, `PreloadContext`, `OnListenerError`, `OnGuardError`, `ResolveMapContext`, `ParamsArgs`, `ParamNameOf`, `PrefetchOptions`.
 
 ### Dev-only (internal)
 

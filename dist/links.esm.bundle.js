@@ -1,3 +1,14 @@
+// src/preload.js
+function defaultPreload(leaf, ctx) {
+  const meta = (
+    /** @type {any} */
+    leaf
+  );
+  if (typeof meta.preload === "function") return meta.preload(ctx);
+  if (typeof meta.load === "function") return meta.load();
+  return void 0;
+}
+
 // src/links.js
 var SELECTOR = "[data-router-link]";
 function attachLinks(router, options = {}) {
@@ -51,8 +62,10 @@ function attachPreload(router, options = {}) {
   const seen = /* @__PURE__ */ new WeakSet();
   const controller = new AbortController();
   const ctx = (
-    /** @type {PreloadContext} */
-    { signal: controller.signal }
+    /** @type {import('./types.js').PreloadContext} */
+    {
+      signal: controller.signal
+    }
   );
   async function onIntent(e) {
     const target = (
@@ -92,15 +105,6 @@ function attachPreload(router, options = {}) {
     document.removeEventListener("pointerenter", onIntent, true);
     document.removeEventListener("focusin", onIntent);
   };
-}
-function defaultPreload(leaf, ctx) {
-  const meta = (
-    /** @type {any} */
-    leaf
-  );
-  if (typeof meta.preload === "function") return meta.preload(ctx);
-  if (typeof meta.load === "function") return meta.load();
-  return void 0;
 }
 export {
   attachLinks,

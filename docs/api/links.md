@@ -98,6 +98,25 @@ export interface PreloadContext {
 }
 ```
 
+## Programmatic prefetch: `router.prefetch`
+
+Same defaults as `attachPreload` (`leaf.preload?.(ctx) ?? leaf.load?.()`), but no DOM: you decide when to prefetch. Useful for:
+
+- `<Link prefetch>` in a framework component (prefetch on mount, on intent, on viewport entry);
+- `afterEnter` — prefetch the current page's links before the user clicks;
+- analytics-driven preloading — "user is likely to go to `/checkout`".
+
+```js
+await router.prefetch('/users/5'); // fire-and-forget, or await
+router.prefetch('/admin', { signal: ctrl.signal }); // cancellable
+```
+
+- **Current map only** — `prefetch` matches against `getSnapshot().map`, not the map at the time of the call. If the map switches mid-preload, the Promise still resolves; nothing throws.
+- **No guard layer** — prefetch warms whatever map is active; guards run only for actual navigation.
+- **Errors are swallowed** — prefetch is opportunistic. Use `leaf.preload` directly if you need to handle failures.
+- **`opts.signal`** — forwarded to `leaf.preload(ctx)`; `leaf.load()` is signal-free. Already-aborted signal → early return, no `leaf.preload` call.
+- **Invalid RRU / notFound / leaf without methods** — no-op, no throw.
+
 ## Don't
 
 - **Don't** add custom `mouseenter` listeners on `[data-router-link]` — `attachPreload` handles normalization, matching, dedupe, and SSR.

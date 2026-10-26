@@ -755,6 +755,35 @@ function handleError(type, extra, prevSnapshot, isInitial, navigationType, env) 
 
 // @ts-check
 
+/**
+ * @typedef {import('./types.js').Node} Node
+ * @typedef {import('./types.js').PreloadContext} PreloadContext
+ */
+
+/**
+ * Default preload: prefer `leaf.preload(ctx)`, fall back to `leaf.load()`.
+ * Both are app-owned metadata on `file()` — not part of the public type.
+ *
+ * `leaf.preload` receives `ctx` (with `signal`); `leaf.load` is called
+ * **without** arguments — `import()` does not accept an `AbortSignal`.
+ *
+ * Shared by `attachPreload` (hover/focus) and `router.prefetch` (programmatic).
+ * Both are opportunistic — errors are handled by the caller, not here.
+ *
+ * @internal
+ * @param {Node} leaf
+ * @param {PreloadContext} ctx
+ * @returns {void | Promise<unknown>}
+ */
+function defaultPreload(leaf, ctx) {
+    const meta = /** @type {any} */ (leaf);
+    if (typeof meta.preload === 'function') return meta.preload(ctx);
+    if (typeof meta.load === 'function') return meta.load();
+    return undefined;
+}
+
+// @ts-check
+
 
 /**
  * @typedef {import('./types.js').Snapshot} Snapshot
@@ -1041,11 +1070,47 @@ function createRouter(options) {
         return eventBus.on('commit', ({ snapshot }) => listener(snapshot));
     }
 
+    /**
+     * Warm a leaf's `preload` / `load` for `url` without navigating.
+     * No-op if `url` is invalid, does not match the **current** map, or
+     * the leaf has neither method. Errors are swallowed — prefetch is
+     * opportunistic.
+     *
+     * Does **not** go through the guard layer: prefetch warms whatever map
+     * is active; guards only run for actual navigation.
+     *
+     * `opts.signal` — forwarded to `leaf.preload(ctx)`; `leaf.load()` is
+     * signal-free. `prefetch` returns early when `signal.aborted` is already
+     * true; a later abort does not cancel an in-flight `leaf.load()`.
+     *
+     * @param {string} url
+     * @param {{ signal?: AbortSignal }} [opts]
+     * @returns {Promise<void>}
+     */
+    async function prefetch(url, opts = {}) {
+        if (!isValidRRU(url)) return;
+        const snap = currentSnapshot;
+        if (!snap) return;
+        const normalized = normalizeRRU(url);
+        const match = snap.map.match(normalized);
+        if (match.status !== 'matched') return;
+        const leaf = match.chain.length > 0 ? match.chain[match.chain.length - 1] : undefined;
+        if (!leaf) return;
+        const signal = opts.signal ?? new AbortController().signal;
+        if (signal.aborted) return;
+        try {
+            await defaultPreload(leaf, { signal });
+        } catch {
+            /* opportunistic — swallow */
+        }
+    }
+
     const router = {
         adapter,
         navigate,
         replace,
         revalidate,
+        prefetch,
         back() {
             if (typeof history !== 'undefined') history.back();
         },

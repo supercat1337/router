@@ -65,6 +65,37 @@ attachPreload(router, {
 });
 ```
 
+## Programmatic prefetch: `router.prefetch`
+
+`attachPreload` (hover/focus) is opt-in via DOM. When you need to prefetch without a DOM event — prefetch on route enter, prefetch all links on the page, or `<Link prefetch>` on mount — use `router.prefetch(url)`:
+
+```js
+router.on('afterEnter', async ({ snapshot }) => {
+    // Prefetch every [data-router-link] on the current page.
+    for (const a of document.querySelectorAll('[data-router-link][href]')) {
+        const href = a.getAttribute('href');
+        if (!href) continue;
+        const rru = router.adapter.normalize(href);
+        if (rru) void router.prefetch(rru);
+    }
+});
+```
+
+Same cache as `afterEnter`: `defaultPreload` follows `leaf.preload?.(ctx) ?? leaf.load?.()`.
+
+Cancellation:
+
+```js
+const ctrl = new AbortController();
+router.prefetch('/users/5', { signal: ctrl.signal });
+// later:
+ctrl.abort();
+```
+
+`prefetch` returns early if the signal is already aborted. A later abort does not cancel an in-flight `leaf.load()` — but `leaf.preload` receives `ctx.signal` and can react to it.
+
+See [`docs/api/links.md`](../api/links.md#programmatic-prefetch-routerprefetch) for the full contract.
+
 ## See also
 
 - [Data loading](data-loading.md) — the `isCurrent` pattern in more detail.

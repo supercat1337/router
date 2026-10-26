@@ -1,5 +1,7 @@
 // @ts-check
 
+import { defaultPreload } from './preload.js';
+
 /**
  * @typedef {import('./types.js').Router} Router
  * @typedef {import('./types.js').AttachLinksOptions} AttachLinksOptions
@@ -71,8 +73,6 @@ export function attachLinks(router, options = {}) {
 
 /**
  * @typedef {import('./types.js').AttachPreloadOptions} AttachPreloadOptions
- * @typedef {import('./types.js').PreloadContext} PreloadContext
- * @typedef {import('./types.js').Node} Node
  * @typedef {import('./types.js').Snapshot} Snapshot
  *
  * @typedef {object} PreloadRouter
@@ -116,7 +116,9 @@ export function attachPreload(router, options = {}) {
     /** @type {WeakSet<Element>} */
     const seen = new WeakSet();
     const controller = new AbortController();
-    const ctx = /** @type {PreloadContext} */ ({ signal: controller.signal });
+    const ctx = /** @type {import('./types.js').PreloadContext} */ ({
+        signal: controller.signal,
+    });
 
     /** @param {Event} e */
     async function onIntent(e) {
@@ -157,22 +159,4 @@ export function attachPreload(router, options = {}) {
         document.removeEventListener('pointerenter', onIntent, true);
         document.removeEventListener('focusin', onIntent);
     };
-}
-
-/**
- * Default preload: prefer `leaf.preload(ctx)`, fall back to `leaf.load()`.
- * Both are app-owned metadata on `file()` — not part of the public type.
- *
- * `leaf.preload` receives `ctx` (with `signal`); `leaf.load` is called
- * without arguments — `import()` does not accept an `AbortSignal`.
- *
- * @param {Node} leaf
- * @param {PreloadContext} ctx
- * @returns {void | Promise<unknown>}
- */
-function defaultPreload(leaf, ctx) {
-    const meta = /** @type {any} */ (leaf);
-    if (typeof meta.preload === 'function') return meta.preload(ctx);
-    if (typeof meta.load === 'function') return meta.load();
-    return undefined;
 }

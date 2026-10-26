@@ -1477,6 +1477,17 @@ function handleError(type, extra, prevSnapshot, isInitial, navigationType, env) 
   return snapshot;
 }
 
+// src/preload.js
+function defaultPreload(leaf, ctx) {
+  const meta = (
+    /** @type {any} */
+    leaf
+  );
+  if (typeof meta.preload === "function") return meta.preload(ctx);
+  if (typeof meta.load === "function") return meta.load();
+  return void 0;
+}
+
 // src/router.js
 function createRouter(options) {
   const HISTORY_LIMIT = 50;
@@ -1639,11 +1650,28 @@ function createRouter(options) {
   function subscribe(listener) {
     return eventBus.on("commit", ({ snapshot }) => listener(snapshot));
   }
+  async function prefetch(url2, opts = {}) {
+    if (!isValidRRU(url2)) return;
+    const snap = currentSnapshot;
+    if (!snap) return;
+    const normalized = normalizeRRU(url2);
+    const match2 = snap.map.match(normalized);
+    if (match2.status !== "matched") return;
+    const leaf = match2.chain.length > 0 ? match2.chain[match2.chain.length - 1] : void 0;
+    if (!leaf) return;
+    const signal = opts.signal ?? new AbortController().signal;
+    if (signal.aborted) return;
+    try {
+      await defaultPreload(leaf, { signal });
+    } catch {
+    }
+  }
   const router = {
     adapter,
     navigate,
     replace,
     revalidate,
+    prefetch,
     back() {
       if (typeof history !== "undefined") history.back();
     },

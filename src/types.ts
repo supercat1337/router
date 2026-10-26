@@ -681,6 +681,21 @@ export interface UrlAdapter {
 // =============================================================================
 
 /**
+ * Options for `Router.prefetch()`.
+ *
+ * @public
+ */
+export interface PrefetchOptions {
+    /**
+     * Aborts the preload. Forwarded to `leaf.preload(ctx)`; `leaf.load()` is
+     * signal-free (`import()` does not accept an `AbortSignal`). `prefetch`
+     * returns early when the signal is already aborted; a later abort does not
+     * cancel an in-flight `leaf.load()`, but `leaf.preload` can watch the signal.
+     */
+    signal?: AbortSignal;
+}
+
+/**
  * The router instance produced by `createRouter`.
  *
  * `navigate` / `replace` do not throw on navigation outcomes
@@ -701,6 +716,17 @@ export interface Router<S = any, R extends RouterMap = RouterMap> {
 
     /** New transaction, history replace. */
     replace(url: string): Snapshot;
+
+    /**
+     * Warm a leaf's `preload` / `load` for `url` without navigating.
+     * No-op if `url` is invalid, does not match the **current** map, or
+     * the leaf has neither method. Errors are swallowed — prefetch is
+     * opportunistic.
+     *
+     * Does **not** go through the guard layer: prefetch warms whatever map
+     * is active; guards only run for actual navigation.
+     */
+    prefetch(url: string, opts?: PrefetchOptions): Promise<void>;
 
     /** Recompute the current RRU. Always increments `navigationId`. */
     revalidate(): Snapshot;

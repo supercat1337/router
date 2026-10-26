@@ -179,20 +179,21 @@ const router = createRouter<AppState, typeof userMap>({
 
 Returned `Router<S, R>`:
 
-| Method                 | Signature      | Purpose                                                  |
-| :--------------------- | :------------- | :------------------------------------------------------- |
-| `navigate(url)`        | `→ Snapshot`   | New transaction, history push                            |
-| `replace(url)`         | `→ Snapshot`   | New transaction, history replace                         |
-| `revalidate()`         | `→ Snapshot`   | Recompute current RRU (always increments `navigationId`) |
-| `back()` / `forward()` | `→ void`       | Delegate to `history.back/forward`                       |
-| `url(name, params?)`   | `→ string`     | Delegates to active map's `url` (typed name)             |
-| `getSnapshot()`        | `→ Snapshot`   | Last committed snapshot (frozen)                         |
-| `getState()`           | `→ S`          | The `getState` passed to `createRouter`                  |
-| `isCurrent(id)`        | `→ boolean`    | `getSnapshot().navigationId === id`                      |
-| `subscribe(fn)`        | `→ () => void` | Fires on **every** commit. Idempotent unsubscribe.       |
-| `on(event, fn)`        | `→ () => void` | Subscribe to a specific event                            |
-| `off(event, fn)`       | `→ void`       | Remove by identity                                       |
-| `once(event, fn)`      | `→ () => void` | Single-fire subscription                                 |
+| Method                 | Signature         | Purpose                                                  |
+| :--------------------- | :---------------- | :------------------------------------------------------- |
+| `navigate(url)`        | `→ Snapshot`      | New transaction, history push                            |
+| `replace(url)`         | `→ Snapshot`      | New transaction, history replace                         |
+| `revalidate()`         | `→ Snapshot`      | Recompute current RRU (always increments `navigationId`) |
+| `prefetch(url, opts?)` | `→ Promise<void>` | Warm a leaf's preload / load without navigating          |
+| `back()` / `forward()` | `→ void`          | Delegate to `history.back/forward`                       |
+| `url(name, params?)`   | `→ string`        | Delegates to active map's `url` (typed name)             |
+| `getSnapshot()`        | `→ Snapshot`      | Last committed snapshot (frozen)                         |
+| `getState()`           | `→ S`             | The `getState` passed to `createRouter`                  |
+| `isCurrent(id)`        | `→ boolean`       | `getSnapshot().navigationId === id`                      |
+| `subscribe(fn)`        | `→ () => void`    | Fires on **every** commit. Idempotent unsubscribe.       |
+| `on(event, fn)`        | `→ () => void`    | Subscribe to a specific event                            |
+| `off(event, fn)`       | `→ void`          | Remove by identity                                       |
+| `once(event, fn)`      | `→ () => void`    | Single-fire subscription                                 |
 
 - **Do not** `await` `navigate` / `replace` / `revalidate` — they are synchronous.
 - **Do not** pass Browser URLs — pass RRUs (`/x`, not `https://host/x`).
@@ -325,6 +326,20 @@ Default: `leaf.preload?.(ctx) ?? leaf.load?.()`. `leaf.preload` receives `ctx`; 
 - **Do not** add custom `mouseenter` listeners on `[data-router-link]`.
 - **Do not** rely on `attachPreload` for correctness — opportunistic.
 - **Do not** call `leaf.preload()` without `ctx`.
+
+#### `router.prefetch(url, opts?) → Promise<void>`
+
+Programmatic counterpart to `attachPreload`. Same defaults (`leaf.preload?.(ctx) ?? leaf.load?.()`), no DOM events. For `<Link prefetch>`, prefetch-on-`afterEnter`, and analytics-driven preloading.
+
+```js
+await router.prefetch('/users/5');
+router.prefetch('/admin', { signal: ctrl.signal });
+```
+
+- **Current map only** — matches against `getSnapshot().map`.
+- **No guard layer** — prefetch does not go through guards; only actual navigation does.
+- **Errors swallowed** — opportunistic, like `attachPreload`.
+- **Do not** call `leaf.preload()` directly if `router.prefetch(url)` would do — you'd duplicate the match logic and the default fallback.
 
 ### Guard layer
 
@@ -491,6 +506,7 @@ State the non-goal and propose the intended workaround. **Do not invent an API.*
 | :--------------------------------------- | :---------------------------- | :-------------------------------------------------------------------------------------------------------------------------------- |
 | `useParams()` hook                       | No hooks                      | `snapshot.params` + framework glue (see [`docs/recipes/react.md`](docs/recipes/react.md))                                         |
 | `<Link to="/x">` component               | No components                 | `<a href={adapter.href(rru)} data-router-link>` — or `attachLinks` for click interception                                         |
+| `<Link prefetch>` component              | No components                 | `router.prefetch(url)` on mount, or `attachPreload` on hover — see [`docs/api/links.md`](docs/api/links.md)                       |
 | `<NavLink to="/x">` with prefix matching | No components                 | `getChainPrefixes(snapshot).includes(rru)` — see [`docs/recipes/active-links.md`](docs/recipes/active-links.md)                   |
 | Blocking loaders                         | Sync core, no `await`         | `afterEnter` + optimistic UI                                                                                                      |
 | Built-in code splitting                  | Not in core                   | User-side `import()` in `afterEnter`, or TanStack Router                                                                          |
@@ -519,6 +535,7 @@ Verified type surface (see `dist/types.d.ts`):
 - **Snapshot** — `navigationType: NavigationType`, `chain: readonly Node[]`, `params` / `partialParams` / `search: Readonly<Record<string,string>>`, `leaf: Node | undefined`, `redirectedFrom?: string` (set when the commit came from a `redirect()` chain).
 - **`getChainPrefixes` / `chainParams`** — `(snapshot) => string[]` / `(snapshot) => Readonly<Record<string,string>>`. Prefix-match active links and breadcrumbs. `chainParams` picks `params` / `partialParams` based on status; consistent with `snapshot.chain` on error.
 - **`UrlAdapter`** — `href`, `historyState`, `replaceState` are **required** methods. Adapters that don't track state return `null` / no-op. `HrefOptions.search?: string` for SSR hash mode.
+- **`Router.prefetch(url, opts?)`** — `opts: PrefetchOptions` — `{ signal?: AbortSignal }`. Same signal semantics as `leaf.preload(ctx)`; `leaf.load()` is signal-free.
 - **`FileMeta.load` / `FileMeta.preload`** — typed conventions. `load: () => Promise<unknown>` — signal-free. `preload: (ctx: PreloadContext) => void | Promise<unknown>` — `ctx.signal` aborts on detach.
 - **`NavigationType`** — `'initial' | 'push' | 'replace' | 'pop' | 'revalidate'`. The transaction source, not a direction.
 - **`MatchResult.search`** — `Record<string, string>` on both branches. Decoded, last-wins.

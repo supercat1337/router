@@ -259,6 +259,11 @@ export type ParamNameOf<K> = K extends `:${infer P}` ? P : never;
 export type ParamsArgs<P extends Record<string, string>> = string extends keyof P ? [params?: Record<string, string>] : [keyof P] extends [never] ? [params?: Record<string, string>] : [params: P];
 
 // @public
+export interface PrefetchOptions {
+    signal?: AbortSignal;
+}
+
+// @public
 export interface PreloadContext {
     readonly signal: AbortSignal;
 }
@@ -323,6 +328,7 @@ export interface Router<S = any, R extends RouterMap = RouterMap> {
     off<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void): void;
     on<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void): () => void;
     once<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void): () => void;
+    prefetch(url: string, opts?: PrefetchOptions): Promise<void>;
     replace(url: string): Snapshot;
     revalidate(): Snapshot;
     route<N extends RouteNameOf<R>>(name: N): Route<N, RouteParamsOf<R, N>>;

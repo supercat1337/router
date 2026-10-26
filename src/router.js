@@ -5,6 +5,7 @@ import { createEventBus } from './events.js';
 import { runTransaction } from './transaction.js';
 import { isMap } from './map.js';
 import { isValidRRU, normalizeRRU } from './normalize.js';
+import { defaultPreload } from './preload.js';
 
 /**
  * @typedef {import('./types.js').Snapshot} Snapshot
@@ -291,11 +292,47 @@ export function createRouter(options) {
         return eventBus.on('commit', ({ snapshot }) => listener(snapshot));
     }
 
+    /**
+     * Warm a leaf's `preload` / `load` for `url` without navigating.
+     * No-op if `url` is invalid, does not match the **current** map, or
+     * the leaf has neither method. Errors are swallowed — prefetch is
+     * opportunistic.
+     *
+     * Does **not** go through the guard layer: prefetch warms whatever map
+     * is active; guards only run for actual navigation.
+     *
+     * `opts.signal` — forwarded to `leaf.preload(ctx)`; `leaf.load()` is
+     * signal-free. `prefetch` returns early when `signal.aborted` is already
+     * true; a later abort does not cancel an in-flight `leaf.load()`.
+     *
+     * @param {string} url
+     * @param {{ signal?: AbortSignal }} [opts]
+     * @returns {Promise<void>}
+     */
+    async function prefetch(url, opts = {}) {
+        if (!isValidRRU(url)) return;
+        const snap = currentSnapshot;
+        if (!snap) return;
+        const normalized = normalizeRRU(url);
+        const match = snap.map.match(normalized);
+        if (match.status !== 'matched') return;
+        const leaf = match.chain.length > 0 ? match.chain[match.chain.length - 1] : undefined;
+        if (!leaf) return;
+        const signal = opts.signal ?? new AbortController().signal;
+        if (signal.aborted) return;
+        try {
+            await defaultPreload(leaf, { signal });
+        } catch {
+            /* opportunistic — swallow */
+        }
+    }
+
     const router = {
         adapter,
         navigate,
         replace,
         revalidate,
+        prefetch,
         back() {
             if (typeof history !== 'undefined') history.back();
         },

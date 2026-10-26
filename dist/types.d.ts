@@ -795,6 +795,21 @@ export declare type ParamNameOf<K> = K extends `:${infer P}` ? P : never;
 export declare type ParamsArgs<P extends Record<string, string>> = string extends keyof P ? [params?: Record<string, string>] : [keyof P] extends [never] ? [params?: Record<string, string>] : [params: P];
 
 /**
+ * Options for `Router.prefetch()`.
+ *
+ * @public
+ */
+export declare interface PrefetchOptions {
+    /**
+     * Aborts the preload. Forwarded to `leaf.preload(ctx)`; `leaf.load()` is
+     * signal-free (`import()` does not accept an `AbortSignal`). `prefetch`
+     * returns early when the signal is already aborted; a later abort does not
+     * cancel an in-flight `leaf.load()`, but `leaf.preload` can watch the signal.
+     */
+    signal?: AbortSignal;
+}
+
+/**
  * Context passed to a preload function.
  *
  * `signal` aborts when `attachPreload(...)` is detached. Forward it to
@@ -953,6 +968,16 @@ export declare interface Router<S = any, R extends RouterMap = RouterMap> {
     navigate(url: string): Snapshot;
     /** New transaction, history replace. */
     replace(url: string): Snapshot;
+    /**
+     * Warm a leaf's `preload` / `load` for `url` without navigating.
+     * No-op if `url` is invalid, does not match the **current** map, or
+     * the leaf has neither method. Errors are swallowed — prefetch is
+     * opportunistic.
+     *
+     * Does **not** go through the guard layer: prefetch warms whatever map
+     * is active; guards only run for actual navigation.
+     */
+    prefetch(url: string, opts?: PrefetchOptions): Promise<void>;
     /** Recompute the current RRU. Always increments `navigationId`. */
     revalidate(): Snapshot;
     /** History back (delegates to `history.back`). */

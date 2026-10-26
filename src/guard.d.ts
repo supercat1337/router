@@ -40,6 +40,7 @@ export type {
     OnListenerError,
     ParamsArgs,
     ParamNameOf,
+    PrefetchOptions,
     PreloadContext,
     RedirectResult,
     ResolveMapContext,
