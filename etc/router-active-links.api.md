@@ -139,6 +139,7 @@ export interface Snapshot {
     readonly notFoundResult?: unknown;
     readonly params: Readonly<Record<string, string>>;
     readonly partialParams: Readonly<Record<string, string>>;
+    readonly redirectedFrom?: string;
     readonly search: Readonly<Record<string, string>>;
     readonly status: 'matched' | 'notFound' | 'error';
     readonly url: string;
@@ -147,9 +148,13 @@ export interface Snapshot {
 // @public
 export interface UrlAdapter {
     readonly base?: string;
+    historyState(): unknown;
+    // Warning: (ae-forgotten-export) The symbol "HrefOptions" needs to be exported by the entry point active-links.d.ts
+    href(rru: string, opts?: HrefOptions): string;
     listen(cb: (event: PopStateEvent | HashChangeEvent) => void): () => void;
     normalize(href: string): string | null;
     read(): string;
+    replaceState(state: unknown): void;
     write(url: string, mode: 'push' | 'replace'): void;
 }
 

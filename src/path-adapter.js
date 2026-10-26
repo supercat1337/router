@@ -70,8 +70,14 @@ function resolveBase(explicitBase) {
  * `read` returns a valid RRU: fallback `'/'` if `location.pathname` is not
  * under `base`, or if the computed RRU would contain `#` (defensive).
  *
- * SSR: `read` returns `'/'`, `write`/`listen` are no-ops. `normalize` is
- * not called in SSR (`attachLinks` is a no-op there); behavior undefined.
+ * `href` builds a Browser URL from an RRU — required by `<Link>` components
+ * and SSR. `historyState` / `replaceState` read and write `history.state`
+ * without changing the URL — for scroll restoration and per-entry state.
+ *
+ * SSR: `read` returns `'/'`, `href` returns `base + rru.slice(1)` (no
+ * `location`), `write` / `listen` / `replaceState` are no-ops,
+ * `historyState` returns `null`. `normalize` is not called in SSR
+ * (`attachLinks` is a no-op there); behavior undefined.
  *
  * @param {{ base?: string }} [opts]
  * @returns {UrlAdapter}
@@ -117,6 +123,25 @@ export function createPathAdapter({ base } = {}) {
             if (sameDoc && abs.hash !== '') return null;
             const rest = abs.pathname.slice(resolvedBase.length);
             return '/' + rest + abs.search;
+        },
+
+        href(rru) {
+            if (typeof rru !== 'string' || !rru.startsWith('/')) {
+                throw new TypeError(
+                    "adapter.href: expected RRU starting with '/', got " + JSON.stringify(rru)
+                );
+            }
+            return resolvedBase + rru.slice(1);
+        },
+
+        historyState() {
+            if (typeof history === 'undefined') return null;
+            return history.state;
+        },
+
+        replaceState(state) {
+            if (typeof history === 'undefined' || typeof location === 'undefined') return;
+            history.replaceState(state, '', location.href);
         },
     };
 }

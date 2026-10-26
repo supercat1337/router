@@ -1,8 +1,9 @@
 {
     "ignorePatterns": [
-        { "pattern": "^https://www\\.npmjs\\.com/package/" }
+        { "pattern": "^https://www\\.npmjs\\.com/package/" },
+        { "pattern": "^https://www\\.w3\\.org/"}
     ],
-    "timeout": "10s",
+    "timeout": "20s",
     "retryOn429": true,
     "retryCount": 2
 }

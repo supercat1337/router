@@ -91,10 +91,7 @@ export function createGuardLayer(options) {
              * @returns {string}
              */
             url(name, ...args) {
-                return r.url(
-                    name,
-                    ...(/** @type {[params?: Record<string, string>]} */ (args))
-                );
+                return r.url(name, .../** @type {[params?: Record<string, string>]} */ (args));
             },
         };
     }
@@ -316,6 +313,9 @@ export function createGuardLayer(options) {
             read: () => adapter.read(),
             write: (url, mode) => adapter.write(url, mode),
             normalize: href => adapter.normalize(href),
+            href: (rru, opts) => adapter.href(rru, opts),
+            historyState: () => adapter.historyState(),
+            replaceState: state => adapter.replaceState(state),
             listen(cb) {
                 return adapter.listen(e => {
                     if (!boundRouter) {

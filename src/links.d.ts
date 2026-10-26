@@ -13,6 +13,7 @@ import type {
     FileNode,
     FolderNode,
     FolderOptions,
+    HrefOptions,
     MatchResult,
     NavigationErrorType,
     NavigationType,
@@ -36,6 +37,7 @@ export type {
     UrlAdapter,
     // Transitive — Snapshot appears in public signatures; api-extractor
     // requires every type reachable through it to be re-exported here.
+    HrefOptions,
     MatchResult,
     NavigationErrorType,
     NavigationType,

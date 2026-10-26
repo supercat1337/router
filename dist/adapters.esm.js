@@ -70,8 +70,14 @@ function resolveBase(explicitBase) {
  * `read` returns a valid RRU: fallback `'/'` if `location.pathname` is not
  * under `base`, or if the computed RRU would contain `#` (defensive).
  *
- * SSR: `read` returns `'/'`, `write`/`listen` are no-ops. `normalize` is
- * not called in SSR (`attachLinks` is a no-op there); behavior undefined.
+ * `href` builds a Browser URL from an RRU — required by `<Link>` components
+ * and SSR. `historyState` / `replaceState` read and write `history.state`
+ * without changing the URL — for scroll restoration and per-entry state.
+ *
+ * SSR: `read` returns `'/'`, `href` returns `base + rru.slice(1)` (no
+ * `location`), `write` / `listen` / `replaceState` are no-ops,
+ * `historyState` returns `null`. `normalize` is not called in SSR
+ * (`attachLinks` is a no-op there); behavior undefined.
  *
  * @param {{ base?: string }} [opts]
  * @returns {UrlAdapter}
@@ -118,6 +124,25 @@ function createPathAdapter({ base } = {}) {
             const rest = abs.pathname.slice(resolvedBase.length);
             return '/' + rest + abs.search;
         },
+
+        href(rru) {
+            if (typeof rru !== 'string' || !rru.startsWith('/')) {
+                throw new TypeError(
+                    "adapter.href: expected RRU starting with '/', got " + JSON.stringify(rru)
+                );
+            }
+            return resolvedBase + rru.slice(1);
+        },
+
+        historyState() {
+            if (typeof history === 'undefined') return null;
+            return history.state;
+        },
+
+        replaceState(state) {
+            if (typeof history === 'undefined' || typeof location === 'undefined') return;
+            history.replaceState(state, '', location.href);
+        },
     };
 }
 
@@ -154,6 +179,13 @@ function validateBase(base) {
  * `read` returns a valid RRU or `/`. `/` when the hash does not start with
  * `/` (e.g. `#section`) or contains a second `#` (`#/users#section`).
  * `read` in SSR throws `TypeError`.
+ *
+ * `href` builds a Browser URL from an RRU. The search defaults to
+ * `location.search`; override via `opts.search` in SSR (where `location`
+ * is absent). `opts.search` must be `''` or start with `?`.
+ *
+ * `historyState` / `replaceState` read and write `history.state` without
+ * changing the URL.
  *
  * In-page anchors in hash mode are not supported via `href`; use
  * `scrollIntoView` after `afterEnter`.
@@ -209,6 +241,37 @@ function createHashAdapter({ base } = {}) {
             if (!rru.startsWith('/')) return null;
             if (rru.includes('#')) return null;
             return rru;
+        },
+
+        href(rru, opts = {}) {
+            if (typeof rru !== 'string' || !rru.startsWith('/')) {
+                throw new TypeError(
+                    "adapter.href: expected RRU starting with '/', got " + JSON.stringify(rru)
+                );
+            }
+            /** @type {string} */
+            let search;
+            if (opts.search !== undefined) {
+                if (opts.search !== '' && !opts.search.startsWith('?')) {
+                    throw new TypeError("adapter.href: opts.search must be '' or start with '?'");
+                }
+                search = opts.search;
+            } else if (typeof location !== 'undefined') {
+                search = location.search;
+            } else {
+                search = '';
+            }
+            return resolvedBase + search + '#' + rru;
+        },
+
+        historyState() {
+            if (typeof history === 'undefined') return null;
+            return history.state;
+        },
+
+        replaceState(state) {
+            if (typeof history === 'undefined' || typeof location === 'undefined') return;
+            history.replaceState(state, '', location.href);
         },
     };
 }

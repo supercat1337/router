@@ -15,11 +15,19 @@ export function createPathAdapter(input?: {
 }): UrlAdapter;
 
 // @public
+export interface HrefOptions {
+    search?: string;
+}
+
+// @public
 export interface UrlAdapter {
     readonly base?: string;
+    historyState(): unknown;
+    href(rru: string, opts?: HrefOptions): string;
     listen(cb: (event: PopStateEvent | HashChangeEvent) => void): () => void;
     normalize(href: string): string | null;
     read(): string;
+    replaceState(state: unknown): void;
     write(url: string, mode: 'push' | 'replace'): void;
 }
 

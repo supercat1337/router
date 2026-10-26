@@ -5,9 +5,9 @@
  * @packageDocumentation
  */
 
-import type { UrlAdapter } from './types.js';
+import type { HrefOptions, UrlAdapter } from './types.js';
 
-export type { UrlAdapter };
+export type { HrefOptions, UrlAdapter };
 
 /**
  * Create a path-mode URL adapter (history API, `base` as pathname prefix).

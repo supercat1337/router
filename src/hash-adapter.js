@@ -32,6 +32,13 @@ function validateBase(base) {
  * `/` (e.g. `#section`) or contains a second `#` (`#/users#section`).
  * `read` in SSR throws `TypeError`.
  *
+ * `href` builds a Browser URL from an RRU. The search defaults to
+ * `location.search`; override via `opts.search` in SSR (where `location`
+ * is absent). `opts.search` must be `''` or start with `?`.
+ *
+ * `historyState` / `replaceState` read and write `history.state` without
+ * changing the URL.
+ *
  * In-page anchors in hash mode are not supported via `href`; use
  * `scrollIntoView` after `afterEnter`.
  *
@@ -86,6 +93,37 @@ export function createHashAdapter({ base } = {}) {
             if (!rru.startsWith('/')) return null;
             if (rru.includes('#')) return null;
             return rru;
+        },
+
+        href(rru, opts = {}) {
+            if (typeof rru !== 'string' || !rru.startsWith('/')) {
+                throw new TypeError(
+                    "adapter.href: expected RRU starting with '/', got " + JSON.stringify(rru)
+                );
+            }
+            /** @type {string} */
+            let search;
+            if (opts.search !== undefined) {
+                if (opts.search !== '' && !opts.search.startsWith('?')) {
+                    throw new TypeError("adapter.href: opts.search must be '' or start with '?'");
+                }
+                search = opts.search;
+            } else if (typeof location !== 'undefined') {
+                search = location.search;
+            } else {
+                search = '';
+            }
+            return resolvedBase + search + '#' + rru;
+        },
+
+        historyState() {
+            if (typeof history === 'undefined') return null;
+            return history.state;
+        },
+
+        replaceState(state) {
+            if (typeof history === 'undefined' || typeof location === 'undefined') return;
+            history.replaceState(state, '', location.href);
         },
     };
 }

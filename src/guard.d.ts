@@ -26,6 +26,7 @@ export type {
     GuardErrorPayload,
     GuardErrorType,
     GuardLayer,
+    HrefOptions,
     MapValidationErrorCode,
     MatchResult,
     NavigationErrorType,

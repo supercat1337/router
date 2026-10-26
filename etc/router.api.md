@@ -210,6 +210,11 @@ export interface GuardLayer {
 export function hasRoute(map: RouterMap, name: string): boolean;
 
 // @public
+export interface HrefOptions {
+    search?: string;
+}
+
+// @public
 export function isFile(x: unknown): x is FileNode;
 
 // @public
@@ -410,6 +415,7 @@ export interface Snapshot {
     readonly notFoundResult?: unknown;
     readonly params: Readonly<Record<string, string>>;
     readonly partialParams: Readonly<Record<string, string>>;
+    readonly redirectedFrom?: string;
     readonly search: Readonly<Record<string, string>>;
     readonly status: 'matched' | 'notFound' | 'error';
     readonly url: string;
@@ -418,9 +424,12 @@ export interface Snapshot {
 // @public
 export interface UrlAdapter {
     readonly base?: string;
+    historyState(): unknown;
+    href(rru: string, opts?: HrefOptions): string;
     listen(cb: (event: PopStateEvent | HashChangeEvent) => void): () => void;
     normalize(href: string): string | null;
     read(): string;
+    replaceState(state: unknown): void;
     write(url: string, mode: 'push' | 'replace'): void;
 }
 

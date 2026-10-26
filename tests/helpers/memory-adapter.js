@@ -7,9 +7,13 @@
  * `write` updates it and appends to `writeCalls`, so tests can assert on
  * `mode` (`push` vs `replace`) — used by guard-layer popstate tests.
  *
+ * `href(rru)` returns the RRU as-is — memory mode has no BU. `historyState`
+ * returns `null`; `replaceState` is a no-op. Add state tracking if a test
+ * needs it.
+ *
  * @param {string} [initial]
  */
-export function createMemoryAdapter(initial = "/") {
+export function createMemoryAdapter(initial = '/') {
     let current = initial;
     /** @type {Array<{ url: string, mode: 'push' | 'replace' }>} */
     const writeCalls = [];
@@ -17,7 +21,7 @@ export function createMemoryAdapter(initial = "/") {
     const listeners = [];
 
     return {
-        base: "/",
+        base: '/',
         writeCalls,
 
         read() {
@@ -28,7 +32,7 @@ export function createMemoryAdapter(initial = "/") {
          * @param {string} url
          * @param {'push' | 'replace'} [mode]
          */
-        write(url, mode = "push") {
+        write(url, mode = 'push') {
             current = url;
             writeCalls.push({ url, mode });
         },
@@ -44,7 +48,29 @@ export function createMemoryAdapter(initial = "/") {
 
         /** @param {string} href */
         normalize(href) {
-            return href.startsWith("/") ? href : null;
+            return href.startsWith('/') ? href : null;
+        },
+
+        /**
+         * @param {string} rru
+         * @param {{ search?: string }} [_opts]
+         * @returns {string}
+         */
+        href(rru, _opts = {}) {
+            if (typeof rru !== 'string' || !rru.startsWith('/')) {
+                throw new TypeError("adapter.href: expected RRU starting with '/'");
+            }
+            return rru;
+        },
+
+        /** @returns {unknown} */
+        historyState() {
+            return null;
+        },
+
+        /** @param {unknown} _state */
+        replaceState(_state) {
+            // no-op — memory adapter does not track history state
         },
 
         trigger() {

@@ -2,7 +2,7 @@
 
 > Function-by-function reference for AI assistants generating code **that uses** `@supercat1337/router`. Not a tutorial — that's `README.md`. Not a contributor guide — that's the internal guide on GitHub.
 >
-> **Version.** Verified against `@supercat1337/router@0.6.0`. On newer versions check `dist/types.d.ts`.
+> **Version.** Verified against `@supercat1337/router@0.7.0`. On newer versions check `dist/types.d.ts`.
 
 ## Where to find things
 
@@ -24,7 +24,7 @@ Five facts that cover 90% of correctness:
 
 1. **The core is synchronous.** `resolveMap` and `notFound` must not return Promises. A Promise is a contract violation (`resolver-promise` / `notFound-promise`).
 2. **Navigation is atomic.** `router.navigate('/x')` returns a `Snapshot` synchronously. Events fire after commit. There is no `await` between the call and the last event.
-3. **URLs are Router-relative (RRU).** `Snapshot.url` starts with `/`, has no `#`. Browser URLs live only inside the adapter.
+3. **URLs are Router-relative (RRU).** `Snapshot.url` starts with `/`, has no `#`. Browser URLs live only inside the adapter — use `adapter.href(rru)` to build a BU for `<a href>`, `adapter.normalize(href)` for the reverse.
 4. **Maps are independent.** No cross-map features, no global route registry. Context switching = `resolveMap` returns a different map.
 5. **Public API only.** `getHistory`, `dryMatch`, `getActiveMap`, `resolveMapFor`, `getRedirectPath` are `@internal` — stripped from `dist/types.d.ts`. Do not use them in application code. `hasRoute` and `subscribe` **are** public.
 
@@ -229,6 +229,7 @@ onMounted(() => {
 | `isMap(x)`      | `→ boolean` | `RouterMap`      |
 | `isRouter(x)`   | `→ boolean` | `Router`         |
 | `isRedirect(x)` | `→ boolean` | `RedirectResult` |
+| `isRoute(x)`    | `→ boolean` | `Route`          |
 
 **Do not** replace with structural checks (`'name' in x`) or `instanceof` — brands are identity checks against a private Symbol.
 
@@ -266,6 +267,26 @@ History API mode. `base` required unless `<base href>` with trailing slash exist
 #### `createHashAdapter({ base? }) → UrlAdapter`
 
 Hash mode. Default `base = location.pathname`. In-page anchors (`#section`) not supported via `href`.
+
+#### `adapter.href(rru, opts?) → string`
+
+Build a Browser URL (BU) from an RRU. Use it in `<a href>` and SSR. Round-trip: `adapter.normalize(adapter.href(rru)) === rru` (path mode, no same-document hash).
+
+```js
+const rru = map.url('userHome', { id: '5' });
+const href = router.adapter.href(rru); // '/app/users/5'
+// <a href={href} data-router-link>...</a>
+```
+
+Hash mode: `opts.search` overrides `location.search` — needed in SSR, where `location` is absent. `opts.search` must be `''` or start with `?`. Throws `TypeError` if `rru` does not start with `/`.
+
+#### `adapter.historyState()` and `adapter.replaceState(state)`
+
+Read / write `history.state` **without changing the URL** — for scroll restoration and per-entry app state.
+
+- **Both are required** on `UrlAdapter` (all built-in adapters implement them). Custom adapters that don't track state must return `null` from `historyState` and be a no-op in `replaceState` — do not omit the methods.
+- `historyState()` returns `null` in SSR / non-browser contexts.
+- `replaceState(state)` never triggers `popstate`, never appears in `historyCalls` in test mocks.
 
 ### Links
 
@@ -454,6 +475,12 @@ const href = map.url(nameFromConfig);
 
 // ❌ try/catch around every url() — hides configuration bugs
 try { router.url(nameFromConfig) } catch { /* silently fall back */ }
+
+// ✅ Build a Browser URL from an RRU via adapter.href
+const href = router.adapter.href(router.url('userHome', { id: '5' }));
+
+// ❌ String-concatenate the base — breaks in hash mode and SSR
+const href = '/app' + router.url('userHome', { id: '5' });
 ```
 
 ## When the user asks for something the library doesn't support
@@ -463,14 +490,14 @@ State the non-goal and propose the intended workaround. **Do not invent an API.*
 | User asks for                    | Doesn't have                  | Correct answer                                                                                                                    |
 | :------------------------------- | :---------------------------- | :-------------------------------------------------------------------------------------------------------------------------------- |
 | `useParams()` hook               | No hooks                      | `snapshot.params` + framework glue (see [`docs/recipes/react.md`](docs/recipes/react.md))                                         |
-| `<Link to="/x">` component       | No components                 | `attachLinks(router)` + `<a data-router-link>`                                                                                    |
+| `<Link to="/x">` component       | No components                 | `<a href={adapter.href(rru)} data-router-link>` — or `attachLinks` for click interception                                         |
 | Blocking loaders                 | Sync core, no `await`         | `afterEnter` + optimistic UI                                                                                                      |
 | Built-in code splitting          | Not in core                   | User-side `import()` in `afterEnter`, or TanStack Router                                                                          |
 | Lazy route tree (deferred map)   | Violates sync core            | `file({ load })` + `afterEnter`; tree stays synchronous                                                                           |
 | Blocking loaders (pre-navigate)  | Not in core                   | Guard layer with `leaf.preload` + `signal` — [`docs/recipes/preload-before-navigate.md`](docs/recipes/preload-before-navigate.md) |
 | Devtools extension               | Not in package                | `globalThis.__SUPERCAT_ROUTER_DEVTOOLS__` — [`docs/recipes/devtools.md`](docs/recipes/devtools.md)                                |
 | Built-in cache with invalidation | Not in core                   | `@supercat1337/persist-core` + user-side loader                                                                                   |
-| Scroll restoration               | Not in core                   | `afterEnter` + `window.scrollTo`                                                                                                  |
+| Scroll restoration               | Not in core                   | `adapter.historyState()` / `adapter.replaceState()` + `window.scrollTo` in `afterEnter`                                           |
 | Cross-map redirect               | Not by design                 | Different map via `resolveMap`, or guard layer                                                                                    |
 | Global route registry            | Not by design                 | Multiple maps + `resolveMap`                                                                                                      |
 | Typed params per route           | ✅ `RouteParamsFor<T>` (0.6+) | Prefer `map.route(name)`                                                                                                          |
@@ -488,7 +515,8 @@ Verified type surface (see `dist/types.d.ts`):
 - **Application state** — `createRouter<S, R>` preserves `S` through `getState()` and `resolveMap({ state })`.
 - **Router** — `Router<S, R>.url(name)` narrows `name` to `RouteNameOf<R>`.
 - **Event payloads** — typed per key.
-- **Snapshot** — `navigationType: NavigationType`, `chain: readonly Node[]`, `params` / `partialParams` / `search: Readonly<Record<string,string>>`, `leaf: Node | undefined`.
+- **Snapshot** — `navigationType: NavigationType`, `chain: readonly Node[]`, `params` / `partialParams` / `search: Readonly<Record<string,string>>`, `leaf: Node | undefined`, `redirectedFrom?: string` (set when the commit came from a `redirect()` chain).
+- **`UrlAdapter`** — `href`, `historyState`, `replaceState` are **required** methods. Adapters that don't track state return `null` / no-op. `HrefOptions.search?: string` for SSR hash mode.
 - **`FileMeta.load` / `FileMeta.preload`** — typed conventions. `load: () => Promise<unknown>` — signal-free. `preload: (ctx: PreloadContext) => void | Promise<unknown>` — `ctx.signal` aborts on detach.
 - **`NavigationType`** — `'initial' | 'push' | 'replace' | 'pop' | 'revalidate'`. The transaction source, not a direction.
 - **`MatchResult.search`** — `Record<string, string>` on both branches. Decoded, last-wins.
@@ -505,6 +533,7 @@ When generating TypeScript, prefer `createRouter<AppState, typeof map>({...})` �
 - [ ] Blocking pre-navigation loaders use the guard layer (`leaf.preload` + `signal`), not the core.
 - [ ] Framework integration uses `router.subscribe` — not the four-event stitch.
 - [ ] Route names from external data validated once via `hasRoute`, not `try/catch` per render.
+- [ ] `<a href>` uses `adapter.href(rru)` — not string-concatenated base.
 - [ ] No `getHistory` / `dryMatch` / `getActiveMap` / `resolveMapFor` / `getRedirectPath`.
 - [ ] Guard wiring: either `createGuardedRouter` (one call) or the exact 5-step order.
 - [ ] Guard decisions use `redirect('/x')`, not `{ redirect: '/x' }` (legacy).

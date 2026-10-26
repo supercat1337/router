@@ -364,3 +364,142 @@ test('path adapter: normalize non-http scheme on null-origin page → null', t =
     const a = createPathAdapter({ base: '/app/' });
     t.is(a.normalize('data:text/plain,x'), null);
 });
+
+// ===========================================================================
+// href
+// ===========================================================================
+
+test('path adapter: href builds BU from RRU', t => {
+    const dom = installDom();
+    t.teardown(() => dom.teardown());
+    const a = createPathAdapter({ base: '/app/' });
+    t.is(a.href('/users/5'), '/app/users/5');
+    t.is(a.href('/'), '/app/');
+});
+
+test('path adapter: href preserves search in RRU', t => {
+    const dom = installDom();
+    t.teardown(() => dom.teardown());
+    const a = createPathAdapter({ base: '/app/' });
+    t.is(a.href('/users/5?tab=1'), '/app/users/5?tab=1');
+});
+
+test('path adapter: href works in SSR (no location)', t => {
+    const dom = installDom();
+    const a = createPathAdapter({ base: '/app/' });
+    dom.teardown();
+    t.is(a.href('/users/5'), '/app/users/5');
+});
+
+test('path adapter: href rejects non-RRU', t => {
+    const dom = installDom();
+    t.teardown(() => dom.teardown());
+    const a = createPathAdapter({ base: '/app/' });
+    t.throws(() => a.href('users/5'), { instanceOf: TypeError });
+    t.throws(() => a.href(''), { instanceOf: TypeError });
+});
+
+test('path adapter: href round-trips with normalize', t => {
+    const dom = installDom({ url: 'https://example.com/app/login' });
+    t.teardown(() => dom.teardown());
+    const a = createPathAdapter({ base: '/app/' });
+    const bu = a.href('/users/5?tab=1');
+    t.is(a.normalize(bu), '/users/5?tab=1');
+});
+
+test('hash adapter: href builds BU with location.search', t => {
+    const dom = installDom({ url: 'https://example.com/app?x=1#/login' });
+    t.teardown(() => dom.teardown());
+    const a = createHashAdapter();
+    t.is(a.href('/users/5'), '/app?x=1#/users/5');
+});
+
+test('hash adapter: href opts.search overrides location.search', t => {
+    const dom = installDom({ url: 'https://example.com/app?x=1#/login' });
+    t.teardown(() => dom.teardown());
+    const a = createHashAdapter();
+    t.is(a.href('/users/5', { search: '?y=2' }), '/app?y=2#/users/5');
+    t.is(a.href('/users/5', { search: '' }), '/app#/users/5');
+});
+
+test('hash adapter: href SSR with explicit base', t => {
+    const dom = installDom();
+    const a = createHashAdapter({ base: '/app/' });
+    dom.teardown();
+    t.is(a.href('/users/5'), '/app/#/users/5');
+    t.is(a.href('/users/5', { search: '?x=1' }), '/app/?x=1#/users/5');
+});
+
+test('hash adapter: href rejects non-RRU', t => {
+    const dom = installDom({ url: 'https://example.com/app#/login' });
+    t.teardown(() => dom.teardown());
+    const a = createHashAdapter();
+    t.throws(() => a.href('users/5'), { instanceOf: TypeError });
+});
+
+test('hash adapter: href rejects opts.search without ?', t => {
+    const dom = installDom({ url: 'https://example.com/app#/login' });
+    t.teardown(() => dom.teardown());
+    const a = createHashAdapter();
+    t.throws(() => a.href('/x', { search: 'x=1' }), { instanceOf: TypeError });
+});
+
+test('hash adapter: href round-trips with normalize', t => {
+    const dom = installDom({ url: 'https://example.com/app?x=1#/login' });
+    t.teardown(() => dom.teardown());
+    const a = createHashAdapter();
+    const bu = a.href('/users/5');
+    t.is(a.normalize(bu), '/users/5');
+});
+
+// ===========================================================================
+// historyState / replaceState
+// ===========================================================================
+
+test('path adapter: historyState starts null', t => {
+    const dom = installDom();
+    t.teardown(() => dom.teardown());
+    const a = createPathAdapter({ base: '/app/' });
+    t.is(a.historyState(), null);
+});
+
+test('path adapter: replaceState updates state without URL change', t => {
+    const dom = installDom({ url: 'https://example.com/app/login' });
+    t.teardown(() => dom.teardown());
+    const a = createPathAdapter({ base: '/app/' });
+    a.replaceState({ scroll: 100 });
+    t.deepEqual(a.historyState(), { scroll: 100 });
+    t.is(dom.historyCalls.length, 0);
+});
+
+test('path adapter: historyState SSR returns null', t => {
+    const dom = installDom();
+    const a = createPathAdapter({ base: '/app/' });
+    dom.teardown();
+    t.is(a.historyState(), null);
+});
+
+test('path adapter: replaceState SSR is no-op', t => {
+    const dom = installDom();
+    const a = createPathAdapter({ base: '/app/' });
+    dom.teardown();
+    t.notThrows(() => a.replaceState({}));
+});
+
+test('hash adapter: historyState / replaceState round-trip', t => {
+    const dom = installDom({ url: 'https://example.com/app#/login' });
+    t.teardown(() => dom.teardown());
+    const a = createHashAdapter();
+    t.is(a.historyState(), null);
+    a.replaceState({ scroll: 42 });
+    t.deepEqual(a.historyState(), { scroll: 42 });
+    t.is(dom.historyCalls.length, 0);
+});
+
+test('hash adapter: replaceState SSR is no-op', t => {
+    const dom = installDom();
+    const a = createHashAdapter({ base: '/app/' });
+    dom.teardown();
+    t.notThrows(() => a.replaceState({}));
+    t.is(a.historyState(), null);
+});

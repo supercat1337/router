@@ -948,7 +948,6 @@ function createEventBus(onListenerError) {
 
 // @ts-check
 
-
 /**
  * @typedef {import('./types.js').Snapshot} Snapshot
  * @typedef {import('./types.js').Node} Node
@@ -1038,6 +1037,7 @@ function commonChainPrefix(prev, next, getKeysMap) {
  * @param {Record<string, string>} search
  * @param {NavigationType} navigationType
  * @param {unknown} [notFoundResult]
+ * @param {string} [redirectedFrom] - original URL before the first redirect
  * @returns {Snapshot}
  */
 function buildSnapshot(
@@ -1050,7 +1050,8 @@ function buildSnapshot(
     url,
     search,
     navigationType,
-    notFoundResult
+    notFoundResult,
+    redirectedFrom
 ) {
     const frozenChain = Object.freeze([...chain]);
     const frozenParams = Object.freeze({ ...params });
@@ -1070,6 +1071,7 @@ function buildSnapshot(
         leaf: frozenChain.length > 0 ? frozenChain[frozenChain.length - 1] : undefined,
     };
     if (status === 'notFound') snap.notFoundResult = notFoundResult;
+    if (redirectedFrom !== undefined) snap.redirectedFrom = redirectedFrom;
     return /** @type {Snapshot} */ (Object.freeze(snap));
 }
 
@@ -1204,6 +1206,8 @@ function runTransaction(source, inputUrl, env) {
     }
 
     let url = normalizeRRU(inputUrl);
+    // For `redirectedFrom`: the URL as passed in, before any redirect hops.
+    const originalUrl = url;
 
     // No-op for navigate/replace (skip when the current snapshot is error).
     if (isNoopEligible && prevSnapshot && prevSnapshot.status !== 'error') {
@@ -1399,6 +1403,7 @@ function runTransaction(source, inputUrl, env) {
     const navigationId = env.nextNavigationId();
 
     // Snapshot commit.
+    const redirectedFrom = redirectPath.length > 0 ? originalUrl : undefined;
     const snapshot = buildSnapshot(
         navigationId,
         /** @type {RouterMap} */ (map),
@@ -1409,7 +1414,8 @@ function runTransaction(source, inputUrl, env) {
         committedUrl,
         search,
         navigationType,
-        notFoundResult
+        notFoundResult,
+        redirectedFrom
     );
     env.commitSnapshot(snapshot);
     env.setLastRedirectPath(redirectPath);

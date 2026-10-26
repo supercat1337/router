@@ -184,6 +184,20 @@ export declare interface FolderOptions {
 }
 
 /**
+ * Options for `adapter.href()`.
+ *
+ * @public
+ */
+export declare interface HrefOptions {
+    /**
+     * Search string including leading `?`, or `''` for none. Only used by
+     * hash-mode adapters (path-mode RRUs already carry search). When omitted,
+     * hash mode reads `location.search`; in SSR this is `''`.
+     */
+    search?: string;
+}
+
+/**
  * Result of `RouterMap.match`. Always one of the two branches; never `null`.
  *
  * `params` is decoded (matched only). `partialParams` is decoded along the
@@ -446,6 +460,15 @@ export declare interface Snapshot {
     /** RRU at commit time: `normalizeRRU(adapter.read())`. */
     readonly url: string;
     /**
+     * The URL that triggered a `redirect()` chain, if any. On a successful
+     * redirect, `redirectedFrom` is the **original** requested URL (not the
+     * target). For multi-hop chains (`/a → /b → /c`), it is the first URL
+     * (`/a`); the internal redirect path is available via the dev-only
+     * `getRedirectPath()`. Absent when there was no redirect. Never set on
+     * error snapshots — use `snapshot.error.path` for `redirect-loop`.
+     */
+    readonly redirectedFrom?: string;
+    /**
      * Last element of `chain`; `undefined` when `chain` is empty
      * (notFound/error at the root). Convenience for the common
      * `snapshot.chain[snapshot.chain.length - 1]` pattern.
@@ -486,6 +509,26 @@ export declare interface UrlAdapter {
     listen(cb: (event: PopStateEvent | HashChangeEvent) => void): () => void;
     /** BU or href → RRU. `null` — not a router URL; let the browser handle it. */
     normalize(href: string): string | null;
+    /**
+     * Build a Browser URL (BU) from an RRU. Required — used by `<Link>`
+     * components and SSR. Path mode: `base + rru.slice(1)`. Hash mode:
+     * `base + search + '#' + rru`, where `search` defaults to
+     * `location.search` and can be overridden via `opts.search` (SSR).
+     *
+     * @throws {TypeError} if `rru` does not start with `/`.
+     */
+    href(rru: string, opts?: HrefOptions): string;
+    /**
+     * Read `history.state` (or adapter equivalent). Optional — for
+     * scroll restoration. Returns `null` when unavailable (SSR, non-browser
+     * contexts, adapters that do not track history state).
+     */
+    historyState(): unknown;
+    /**
+     * Replace `history.state` **without changing the URL**. Optional —
+     * for scroll restoration and app-level per-history-entry state.
+     */
+    replaceState(state: unknown): void;
     /** Base directory (path mode) or base pathname (hash mode). */
     readonly base?: string;
 }

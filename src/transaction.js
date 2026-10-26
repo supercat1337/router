@@ -94,6 +94,8 @@ export function runTransaction(source, inputUrl, env) {
     }
 
     let url = normalizeRRU(inputUrl);
+    // For `redirectedFrom`: the URL as passed in, before any redirect hops.
+    const originalUrl = url;
 
     // No-op for navigate/replace (skip when the current snapshot is error).
     if (isNoopEligible && prevSnapshot && prevSnapshot.status !== 'error') {
@@ -289,6 +291,7 @@ export function runTransaction(source, inputUrl, env) {
     const navigationId = env.nextNavigationId();
 
     // Snapshot commit.
+    const redirectedFrom = redirectPath.length > 0 ? originalUrl : undefined;
     const snapshot = buildSnapshot(
         navigationId,
         /** @type {RouterMap} */ (map),
@@ -299,7 +302,8 @@ export function runTransaction(source, inputUrl, env) {
         committedUrl,
         search,
         navigationType,
-        notFoundResult
+        notFoundResult,
+        redirectedFrom
     );
     env.commitSnapshot(snapshot);
     env.setLastRedirectPath(redirectPath);

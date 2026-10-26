@@ -5,8 +5,11 @@
  *
  * Mocks: `location`, `history`, `addEventListener`, `removeEventListener`,
  * `document`. `history.pushState`/`replaceState` update `location` and are
- * recorded in `historyCalls`. Call `teardown()` (idempotent) to restore the
- * original globals.
+ * recorded in `historyCalls` when the URL changes. `replaceState` with the
+ * same URL only updates `history.state` — used by `adapter.replaceState()`
+ * for scroll restoration (no URL change, no `historyCalls` entry).
+ *
+ * Call `teardown()` (idempotent) to restore the original globals.
  *
  * @param {{
  *   url?: string,
@@ -39,23 +42,31 @@ export function installDom(opts = {}) {
     }
 
     const hist = {
+        state: /** @type {unknown} */ (null),
+
         /**
-         * @param {unknown} _state
+         * @param {unknown} state
          * @param {string} _title
          * @param {string} u
          */
-        pushState(_state, _title, u) {
+        pushState(state, _title, u) {
             historyCalls.push({ method: 'push', url: u });
+            hist.state = state;
             navigateTo(u);
         },
+
         /**
-         * @param {unknown} _state
+         * @param {unknown} state
          * @param {string} _title
          * @param {string} u
          */
-        replaceState(_state, _title, u) {
-            historyCalls.push({ method: 'replace', url: u });
-            navigateTo(u);
+        replaceState(state, _title, u) {
+            hist.state = state;
+            const sameUrl = new URL(u, loc.href).href === loc.href;
+            if (!sameUrl) {
+                historyCalls.push({ method: 'replace', url: u });
+                navigateTo(u);
+            }
         },
     };
 
@@ -127,7 +138,7 @@ export function installDom(opts = {}) {
     g.document = doc;
 
     let done = false;
-return {
+    return {
         location: loc,
         historyCalls,
         listeners,
@@ -184,22 +195,31 @@ export function makeElement(attrs) {
     /** @type {any} */
     const el = {
         dataset,
+        /** @param {string} name */
         getAttribute(name) {
             return name in store ? store[name] : null;
         },
+        /**
+         * @param {string} name
+         * @param {string} value
+         */
         setAttribute(name, value) {
             store[name] = String(value);
         },
+        /** @param {string} name */
         removeAttribute(name) {
             delete store[name];
         },
+        /** @param {string} name */
         hasAttribute(name) {
             return name in store;
         },
+        /** @param {string} sel */
         matches(sel) {
             if (sel === '[data-router-link]') return 'data-router-link' in store;
             return false;
         },
+        /** @param {string} sel */
         closest(sel) {
             return el.matches(sel) ? el : null;
         },

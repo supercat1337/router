@@ -1128,7 +1128,7 @@ function commonChainPrefix(prev, next, getKeysMap2) {
   }
   return n;
 }
-function buildSnapshot(navigationId, map, status, chain, params, partialParams, url, search, navigationType, notFoundResult) {
+function buildSnapshot(navigationId, map, status, chain, params, partialParams, url, search, navigationType, notFoundResult, redirectedFrom) {
   const frozenChain = Object.freeze([...chain]);
   const frozenParams = Object.freeze({ ...params });
   const frozenPartialParams = Object.freeze({ ...partialParams });
@@ -1146,6 +1146,7 @@ function buildSnapshot(navigationId, map, status, chain, params, partialParams, 
     leaf: frozenChain.length > 0 ? frozenChain[frozenChain.length - 1] : void 0
   };
   if (status === "notFound") snap.notFoundResult = notFoundResult;
+  if (redirectedFrom !== void 0) snap.redirectedFrom = redirectedFrom;
   return (
     /** @type {Snapshot} */
     Object.freeze(snap)
@@ -1200,6 +1201,7 @@ function runTransaction(source, inputUrl, env) {
     );
   }
   let url = normalizeRRU(inputUrl);
+  const originalUrl = url;
   if (isNoopEligible && prevSnapshot && prevSnapshot.status !== "error") {
     const current = normalizeRRU(env.adapter.read());
     if (url === current) return prevSnapshot;
@@ -1369,6 +1371,7 @@ function runTransaction(source, inputUrl, env) {
     }
   }
   const navigationId = env.nextNavigationId();
+  const redirectedFrom = redirectPath.length > 0 ? originalUrl : void 0;
   const snapshot = buildSnapshot(
     navigationId,
     /** @type {RouterMap} */
@@ -1380,7 +1383,8 @@ function runTransaction(source, inputUrl, env) {
     committedUrl,
     search,
     navigationType,
-    notFoundResult
+    notFoundResult,
+    redirectedFrom
   );
   env.commitSnapshot(snapshot);
   env.setLastRedirectPath(redirectPath);

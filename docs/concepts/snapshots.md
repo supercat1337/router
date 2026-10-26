@@ -4,6 +4,7 @@ The `Snapshot` is the router's committed state after a transaction. It is the si
 
 - **Pull vs push** — `getSnapshot` vs `subscribe`.
 - **Immutability** — what's frozen, what's not.
+- **`redirectedFrom`** — original URL when the commit went through a `redirect()` chain.
 - **`navigationId`** — transaction id, not history position.
 - **`navigationType`** — transaction source, not history direction.
 
@@ -57,6 +58,26 @@ Two snapshot fields are app-owned and **not** frozen:
 
 `snapshot.leaf` is a convenience — it's `chain[chain.length - 1]` or `undefined` for an empty chain (`notFound` / `error` at the root).
 
+## `redirectedFrom`
+
+The URL that triggered a `redirect()` chain. Present only when the committed transaction went through at least one `redirect()` from a `notFound` handler.
+
+```js
+const map = createMap({ login: file({ name: 'login' }) }, {
+    notFound: ({ url }) => (url === '/old' ? redirect('/login') : { view: '404' }),
+});
+
+router.navigate('/old').redirectedFrom;   // '/old'
+router.navigate('/login').redirectedFrom; // undefined
+```
+
+- **Multi-hop:** `/a → /b → /c` → `redirectedFrom = '/a'` (the original), `url = '/c'` (the final).
+- **Not for guard redirects** — those commit a new transaction via `router.replace()`. `redirectedFrom` describes a redirect **within** a single transaction.
+- **Absent on error snapshots** — for `redirect-loop`, use `snapshot.error.path` (the chain of normalized URLs that looped).
+- **Absent on direct notFound** — nothing redirected; the URL just did not match.
+
+Use it for analytics ("user tried `/old`, we redirected to `/login`"), debugging redirect rules, or replacing a history entry with the original URL on `popstate`.
+
 ## `navigationId` — transaction id, not history position
 
 Monotonic within the document. Increments on **every** transaction — including `revalidate()` even when nothing changed.
@@ -83,24 +104,24 @@ router.on('afterEnter', ({ snapshot }) => {
 
 `navigationType` records **what triggered** the commit:
 
-| Value          | Source                                                   |
-| :------------- | :------------------------------------------------------- |
-| `'initial'`    | the first commit inside `createRouter`                   |
-| `'push'`       | `router.navigate(url)`                                   |
-| `'replace'`    | `router.replace(url)`                                    |
-| `'pop'`        | a `popstate` / `hashchange` from the browser             |
+| Value | Source |
+| :--- | :--- |
+| `'initial'` | the first commit inside `createRouter` |
+| `'push'` | `router.navigate(url)` |
+| `'replace'` | `router.replace(url)` |
+| `'pop'` | a `popstate` / `hashchange` from the browser |
 | `'revalidate'` | `router.revalidate()` — recompute without moving the URL |
 
 ```js
 router.navigate('/profile');
-router.getSnapshot().navigationType; // 'push'
+router.getSnapshot().navigationType;  // 'push'
 
 router.replace('/profile');
-router.getSnapshot().navigationType; // 'replace'
+router.getSnapshot().navigationType;  // 'replace'
 
 appState.isAuthed = true;
 router.revalidate();
-router.getSnapshot().navigationType; // 'revalidate'
+router.getSnapshot().navigationType;  // 'revalidate'
 
 // browser back/forward → 'pop'
 ```

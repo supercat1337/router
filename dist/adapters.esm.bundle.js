@@ -64,6 +64,22 @@ function createPathAdapter({ base } = {}) {
       if (sameDoc && abs.hash !== "") return null;
       const rest = abs.pathname.slice(resolvedBase.length);
       return "/" + rest + abs.search;
+    },
+    href(rru) {
+      if (typeof rru !== "string" || !rru.startsWith("/")) {
+        throw new TypeError(
+          "adapter.href: expected RRU starting with '/', got " + JSON.stringify(rru)
+        );
+      }
+      return resolvedBase + rru.slice(1);
+    },
+    historyState() {
+      if (typeof history === "undefined") return null;
+      return history.state;
+    },
+    replaceState(state) {
+      if (typeof history === "undefined" || typeof location === "undefined") return;
+      history.replaceState(state, "", location.href);
     }
   };
 }
@@ -118,6 +134,33 @@ function createHashAdapter({ base } = {}) {
       if (!rru.startsWith("/")) return null;
       if (rru.includes("#")) return null;
       return rru;
+    },
+    href(rru, opts = {}) {
+      if (typeof rru !== "string" || !rru.startsWith("/")) {
+        throw new TypeError(
+          "adapter.href: expected RRU starting with '/', got " + JSON.stringify(rru)
+        );
+      }
+      let search;
+      if (opts.search !== void 0) {
+        if (opts.search !== "" && !opts.search.startsWith("?")) {
+          throw new TypeError("adapter.href: opts.search must be '' or start with '?'");
+        }
+        search = opts.search;
+      } else if (typeof location !== "undefined") {
+        search = location.search;
+      } else {
+        search = "";
+      }
+      return resolvedBase + search + "#" + rru;
+    },
+    historyState() {
+      if (typeof history === "undefined") return null;
+      return history.state;
+    },
+    replaceState(state) {
+      if (typeof history === "undefined" || typeof location === "undefined") return;
+      history.replaceState(state, "", location.href);
     }
   };
 }

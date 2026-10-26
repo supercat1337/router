@@ -1,6 +1,5 @@
 // @ts-check
 
-
 /**
  * @typedef {import('./types.js').Snapshot} Snapshot
  * @typedef {import('./types.js').Node} Node
@@ -90,6 +89,7 @@ export function commonChainPrefix(prev, next, getKeysMap) {
  * @param {Record<string, string>} search
  * @param {NavigationType} navigationType
  * @param {unknown} [notFoundResult]
+ * @param {string} [redirectedFrom] - original URL before the first redirect
  * @returns {Snapshot}
  */
 export function buildSnapshot(
@@ -102,7 +102,8 @@ export function buildSnapshot(
     url,
     search,
     navigationType,
-    notFoundResult
+    notFoundResult,
+    redirectedFrom
 ) {
     const frozenChain = Object.freeze([...chain]);
     const frozenParams = Object.freeze({ ...params });
@@ -122,6 +123,7 @@ export function buildSnapshot(
         leaf: frozenChain.length > 0 ? frozenChain[frozenChain.length - 1] : undefined,
     };
     if (status === 'notFound') snap.notFoundResult = notFoundResult;
+    if (redirectedFrom !== undefined) snap.redirectedFrom = redirectedFrom;
     return /** @type {Snapshot} */ (Object.freeze(snap));
 }
 
