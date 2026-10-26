@@ -55,6 +55,11 @@ export interface FolderOptions {
 }
 
 // @public
+export interface HrefOptions {
+    search?: string;
+}
+
+// @public
 export type MatchResult = {
     status: 'matched';
     chain: Node_2[];
@@ -149,7 +154,6 @@ export interface Snapshot {
 export interface UrlAdapter {
     readonly base?: string;
     historyState(): unknown;
-    // Warning: (ae-forgotten-export) The symbol "HrefOptions" needs to be exported by the entry point active-links.d.ts
     href(rru: string, opts?: HrefOptions): string;
     listen(cb: (event: PopStateEvent | HashChangeEvent) => void): () => void;
     normalize(href: string): string | null;

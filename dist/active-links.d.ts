@@ -156,7 +156,7 @@ export declare interface FolderOptions {
  *
  * @public
  */
-declare interface HrefOptions {
+export declare interface HrefOptions {
     /**
      * Search string including leading `?`, or `''` for none. Only used by
      * hash-mode adapters (path-mode RRUs already carry search). When omitted,
