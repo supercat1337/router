@@ -63,11 +63,14 @@ Two snapshot fields are app-owned and **not** frozen:
 The URL that triggered a `redirect()` chain. Present only when the committed transaction went through at least one `redirect()` from a `notFound` handler.
 
 ```js
-const map = createMap({ login: file({ name: 'login' }) }, {
-    notFound: ({ url }) => (url === '/old' ? redirect('/login') : { view: '404' }),
-});
+const map = createMap(
+    { login: file({ name: 'login' }) },
+    {
+        notFound: ({ url }) => (url === '/old' ? redirect('/login') : { view: '404' }),
+    }
+);
 
-router.navigate('/old').redirectedFrom;   // '/old'
+router.navigate('/old').redirectedFrom; // '/old'
 router.navigate('/login').redirectedFrom; // undefined
 ```
 
@@ -77,6 +80,32 @@ router.navigate('/login').redirectedFrom; // undefined
 - **Absent on direct notFound** — nothing redirected; the URL just did not match.
 
 Use it for analytics ("user tried `/old`, we redirected to `/login`"), debugging redirect rules, or replacing a history entry with the original URL on `popstate`.
+
+## Chain prefixes and params
+
+`snapshot.chain` is the full chain of nodes. `getChainPrefixes(snapshot)` returns the URL prefix down to each of them; `chainParams(snapshot)` returns the `:name` params in scope.
+
+```js
+import { getChainPrefixes, chainParams } from '@supercat1337/router';
+
+const snap = router.getSnapshot();
+// URL: /admin/users/5/edit, chain: [admin, users, :id, editFile]
+
+getChainPrefixes(snap);
+// ['/admin', '/admin/users', '/admin/users/5', '/admin/users/5/edit']
+
+chainParams(snap);
+// { id: '5' }
+```
+
+- **Prefix matching** — `getChainPrefixes` is the basis for `<NavLink>`-style active marking. A link whose RRU appears in this array is active — even if the current URL goes deeper.
+- **Breadcrumbs** — pair each prefix with its node (`snapshot.chain[i]`) to render `<a href={prefixes[i]}>` for each level.
+- **Params for custom rendering** — `chainParams(snapshot)` is the one function that works for `matched`, `notFound`, and (consistently) `error` snapshots. Use it instead of `snapshot.params` / `snapshot.partialParams` if you don't branch on status.
+- **Search excluded** — prefixes are pathname-only.
+- **Canonical encoding** — `:name` segments encoded via `encodeURIComponent`, matching `map.url()` / `router.url()`. If your links are built via those helpers, `deeperUrl.startsWith(prefix)` works even for IDs containing `/`, `?`, `#`.
+- **Error snapshots** — return the prefixes of the previous committed state, consistent with `snapshot.chain`.
+
+For strict RRU equality (single-link active state), use `snapshot.url` directly — see [`attachActiveLinks`](../api/active-links.md) and [`docs/recipes/active-links.md`](../recipes/active-links.md).
 
 ## `navigationId` — transaction id, not history position
 
@@ -104,24 +133,24 @@ router.on('afterEnter', ({ snapshot }) => {
 
 `navigationType` records **what triggered** the commit:
 
-| Value | Source |
-| :--- | :--- |
-| `'initial'` | the first commit inside `createRouter` |
-| `'push'` | `router.navigate(url)` |
-| `'replace'` | `router.replace(url)` |
-| `'pop'` | a `popstate` / `hashchange` from the browser |
+| Value          | Source                                                   |
+| :------------- | :------------------------------------------------------- |
+| `'initial'`    | the first commit inside `createRouter`                   |
+| `'push'`       | `router.navigate(url)`                                   |
+| `'replace'`    | `router.replace(url)`                                    |
+| `'pop'`        | a `popstate` / `hashchange` from the browser             |
 | `'revalidate'` | `router.revalidate()` — recompute without moving the URL |
 
 ```js
 router.navigate('/profile');
-router.getSnapshot().navigationType;  // 'push'
+router.getSnapshot().navigationType; // 'push'
 
 router.replace('/profile');
-router.getSnapshot().navigationType;  // 'replace'
+router.getSnapshot().navigationType; // 'replace'
 
 appState.isAuthed = true;
 router.revalidate();
-router.getSnapshot().navigationType;  // 'revalidate'
+router.getSnapshot().navigationType; // 'revalidate'
 
 // browser back/forward → 'pop'
 ```

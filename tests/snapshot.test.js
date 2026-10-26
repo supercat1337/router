@@ -263,3 +263,22 @@ test('buildErrorSnapshot: anchored to prev', t => {
     t.deepEqual(err.search, { tab: '1' });
     t.is(err.navigationType, 'replace');
 });
+
+test('urlPrefixes: :name with special chars — encoded canonically', t => {
+    const map = createMap({ users: folder({ ':id': file({ name: 'u' }) }) }, { notFound: nf });
+    const r = map.match('/users/a%2Fb');
+    if (r.status !== 'matched') return t.fail();
+    const snap = {
+        navigationId: 1,
+        navigationType: /** @type {'push'} */ ('push'),
+        map,
+        status: /** @type {'matched'} */ ('matched'),
+        chain: r.chain,
+        params: r.params, // { id: 'a/b' } — decoded
+        partialParams: {},
+        search: {},
+        url: '/users/a%2Fb',
+        leaf: leafOf(r.chain),
+    };
+    t.deepEqual(urlPrefixes(r.chain, snap, kmOf(map)), ['/users', '/users/a%2Fb']);
+});

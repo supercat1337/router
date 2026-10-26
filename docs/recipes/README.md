@@ -17,6 +17,7 @@ Task-oriented. Skip around.
 ## Rendering
 
 - [Custom 404 render](custom-404.md)
+- [Active links](active-links.md) — strict vs prefix matching for `<NavLink>`
 - [React integration](react.md)
 - [Vue integration](vue.md)
 

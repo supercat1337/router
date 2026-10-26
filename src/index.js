@@ -6,3 +6,4 @@ export { redirect, isRedirect } from './redirect.js';
 export { normalizeRRU } from './normalize.js';
 export { createRouter, isRouter } from './router.js';
 export { isRoute } from './route.js';
+export { chainParams, getChainPrefixes } from './snapshot.js';

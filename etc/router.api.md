@@ -21,6 +21,9 @@ export interface AttachPreloadOptions {
 }
 
 // @public
+export function chainParams(snapshot: Snapshot): Readonly<Record<string, string>>;
+
+// @public
 export type Children = Record<string, FileNode | FolderNode>;
 
 // @public
@@ -152,6 +155,9 @@ export interface FolderOptions {
     [key: string]: any;
     notFound?: NotFoundHandler;
 }
+
+// @public
+export function getChainPrefixes(snapshot: Snapshot): string[];
 
 // @public
 export type Guard = (ctx: GuardContext) => Decision | Promise<Decision>;

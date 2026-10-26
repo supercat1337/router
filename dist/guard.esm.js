@@ -168,6 +168,7 @@ function isMap(x) {
 
 // @ts-check
 
+
 /**
  * @typedef {import('./types.js').Snapshot} Snapshot
  * @typedef {import('./types.js').Node} Node
@@ -177,9 +178,17 @@ function isMap(x) {
  */
 
 /**
- * @internal
+ * `:name` params of `snapshot.chain`. Convenience for generic code that
+ * works on both matched and notFound snapshots — returns `params` when
+ * `status === 'matched'`, `partialParams` otherwise (including `error`).
+ *
+ * Always returns a frozen object. For `error` snapshots, returns the
+ * params of the previous committed snapshot — consistent with
+ * `snapshot.chain` / `snapshot.map` / `snapshot.leaf`.
+ *
+ * @public
  * @param {Snapshot} snapshot
- * @returns {Record<string, string>}
+ * @returns {Readonly<Record<string, string>>}
  */
 function chainParams(snapshot) {
     return snapshot.status === 'matched' ? snapshot.params : snapshot.partialParams;
@@ -219,7 +228,11 @@ function urlPrefixes(chain, snapshot, keysMap) {
         } else if (key.startsWith(':')) {
             const name = key.slice(1);
             const params = chainParams(snapshot);
-            prefix = parentPrefix + '/' + (params[name] ?? '');
+            // Encode :name values canonically — matches `map.url()` output.
+            // Handles IDs containing '/', '?', '#'. Non-canonical input URLs
+            // (e.g. `/users/%35` vs `/users/5`) are accepted at the router
+            // level, but prefix matching then relies on the caller's encoding.
+            prefix = parentPrefix + '/' + encodeURIComponent(params[name] ?? '');
         } else {
             prefix = parentPrefix + '/' + key;
         }
@@ -323,9 +336,9 @@ function buildErrorSnapshot(navigationId, prev, type, extra, url, navigationType
             navigationType,
             map: prev.map,
             status: 'error',
-            chain: prev.chain, // already frozen
+            chain: prev.chain,
             params: Object.freeze({}),
-            partialParams: chainParams(prev), // already frozen (prev.params / prev.partialParams)
+            partialParams: chainParams(prev),
             search: prev.search ?? Object.freeze({}),
             url,
             leaf: prev.leaf,
@@ -1174,10 +1187,7 @@ function createGuardLayer(options) {
              * @returns {string}
              */
             url(name, ...args) {
-                return r.url(
-                    name,
-                    ...(/** @type {[params?: Record<string, string>]} */ (args))
-                );
+                return r.url(name, .../** @type {[params?: Record<string, string>]} */ (args));
             },
         };
     }
@@ -1393,7 +1403,7 @@ function createGuardLayer(options) {
      * @param {UrlAdapter} adapter
      * @returns {UrlAdapter}
      */
-        function wrapAdapter(adapter) {
+    function wrapAdapter(adapter) {
         wrappedAdapter = {
             base: adapter.base,
             read: () => adapter.read(),

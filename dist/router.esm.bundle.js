@@ -1091,6 +1091,14 @@ function createEventBus(onListenerError) {
 function chainParams(snapshot) {
   return snapshot.status === "matched" ? snapshot.params : snapshot.partialParams;
 }
+function getChainPrefixes(snapshot) {
+  const km = (
+    /** @type {any} */
+    snapshot.map[kKeysMap]
+  );
+  const keysMap = km instanceof WeakMap ? km : /* @__PURE__ */ new WeakMap();
+  return urlPrefixes(snapshot.chain, snapshot, keysMap);
+}
 function pathname(url) {
   const q = url.indexOf("?");
   return q >= 0 ? url.slice(0, q) : url;
@@ -1111,7 +1119,7 @@ function urlPrefixes(chain, snapshot, keysMap) {
     } else if (key.startsWith(":")) {
       const name = key.slice(1);
       const params = chainParams(snapshot);
-      prefix = parentPrefix + "/" + (params[name] ?? "");
+      prefix = parentPrefix + "/" + encodeURIComponent(params[name] ?? "");
     } else {
       prefix = parentPrefix + "/" + key;
     }
@@ -1172,10 +1180,8 @@ function buildErrorSnapshot(navigationId, prev, type, extra, url, navigationType
       map: prev.map,
       status: "error",
       chain: prev.chain,
-      // already frozen
       params: Object.freeze({}),
       partialParams: chainParams(prev),
-      // already frozen (prev.params / prev.partialParams)
       search: prev.search ?? Object.freeze({}),
       url,
       leaf: prev.leaf,
@@ -1687,10 +1693,12 @@ function isRouter(x) {
 }
 export {
   MapValidationError,
+  chainParams,
   createMap,
   createRouter,
   file,
   folder,
+  getChainPrefixes,
   hasRoute,
   isFile,
   isFolder,

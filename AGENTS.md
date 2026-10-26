@@ -487,21 +487,22 @@ const href = '/app' + router.url('userHome', { id: '5' });
 
 State the non-goal and propose the intended workaround. **Do not invent an API.**
 
-| User asks for                    | Doesn't have                  | Correct answer                                                                                                                    |
-| :------------------------------- | :---------------------------- | :-------------------------------------------------------------------------------------------------------------------------------- |
-| `useParams()` hook               | No hooks                      | `snapshot.params` + framework glue (see [`docs/recipes/react.md`](docs/recipes/react.md))                                         |
-| `<Link to="/x">` component       | No components                 | `<a href={adapter.href(rru)} data-router-link>` — or `attachLinks` for click interception                                         |
-| Blocking loaders                 | Sync core, no `await`         | `afterEnter` + optimistic UI                                                                                                      |
-| Built-in code splitting          | Not in core                   | User-side `import()` in `afterEnter`, or TanStack Router                                                                          |
-| Lazy route tree (deferred map)   | Violates sync core            | `file({ load })` + `afterEnter`; tree stays synchronous                                                                           |
-| Blocking loaders (pre-navigate)  | Not in core                   | Guard layer with `leaf.preload` + `signal` — [`docs/recipes/preload-before-navigate.md`](docs/recipes/preload-before-navigate.md) |
-| Devtools extension               | Not in package                | `globalThis.__SUPERCAT_ROUTER_DEVTOOLS__` — [`docs/recipes/devtools.md`](docs/recipes/devtools.md)                                |
-| Built-in cache with invalidation | Not in core                   | `@supercat1337/persist-core` + user-side loader                                                                                   |
-| Scroll restoration               | Not in core                   | `adapter.historyState()` / `adapter.replaceState()` + `window.scrollTo` in `afterEnter`                                           |
-| Cross-map redirect               | Not by design                 | Different map via `resolveMap`, or guard layer                                                                                    |
-| Global route registry            | Not by design                 | Multiple maps + `resolveMap`                                                                                                      |
-| Typed params per route           | ✅ `RouteParamsFor<T>` (0.6+) | Prefer `map.route(name)`                                                                                                          |
-| `tryUrl` (non-throwing `url`)    | Not in 0.6                    | `hasRoute(map, name)` at load time + plain `url()` everywhere else                                                                |
+| User asks for                            | Doesn't have                  | Correct answer                                                                                                                    |
+| :--------------------------------------- | :---------------------------- | :-------------------------------------------------------------------------------------------------------------------------------- |
+| `useParams()` hook                       | No hooks                      | `snapshot.params` + framework glue (see [`docs/recipes/react.md`](docs/recipes/react.md))                                         |
+| `<Link to="/x">` component               | No components                 | `<a href={adapter.href(rru)} data-router-link>` — or `attachLinks` for click interception                                         |
+| `<NavLink to="/x">` with prefix matching | No components                 | `getChainPrefixes(snapshot).includes(rru)` — see [`docs/recipes/active-links.md`](docs/recipes/active-links.md)                   |
+| Blocking loaders                         | Sync core, no `await`         | `afterEnter` + optimistic UI                                                                                                      |
+| Built-in code splitting                  | Not in core                   | User-side `import()` in `afterEnter`, or TanStack Router                                                                          |
+| Lazy route tree (deferred map)           | Violates sync core            | `file({ load })` + `afterEnter`; tree stays synchronous                                                                           |
+| Blocking loaders (pre-navigate)          | Not in core                   | Guard layer with `leaf.preload` + `signal` — [`docs/recipes/preload-before-navigate.md`](docs/recipes/preload-before-navigate.md) |
+| Devtools extension                       | Not in package                | `globalThis.__SUPERCAT_ROUTER_DEVTOOLS__` — [`docs/recipes/devtools.md`](docs/recipes/devtools.md)                                |
+| Built-in cache with invalidation         | Not in core                   | `@supercat1337/persist-core` + user-side loader                                                                                   |
+| Scroll restoration                       | Not in core                   | `adapter.historyState()` / `adapter.replaceState()` + `window.scrollTo` in `afterEnter`                                           |
+| Cross-map redirect                       | Not by design                 | Different map via `resolveMap`, or guard layer                                                                                    |
+| Global route registry                    | Not by design                 | Multiple maps + `resolveMap`                                                                                                      |
+| Typed params per route                   | ✅ `RouteParamsFor<T>` (0.6+) | Prefer `map.route(name)`                                                                                                          |
+| `tryUrl` (non-throwing `url`)            | Not in 0.6                    | `hasRoute(map, name)` at load time + plain `url()` everywhere else                                                                |
 
 For the top half of this table, the honest recommendation is often: **"if you need this in the core, use TanStack Router (React) or Vue Router (Vue) instead."** Suggesting a different router is the correct answer, not a failure.
 
@@ -516,6 +517,7 @@ Verified type surface (see `dist/types.d.ts`):
 - **Router** — `Router<S, R>.url(name)` narrows `name` to `RouteNameOf<R>`.
 - **Event payloads** — typed per key.
 - **Snapshot** — `navigationType: NavigationType`, `chain: readonly Node[]`, `params` / `partialParams` / `search: Readonly<Record<string,string>>`, `leaf: Node | undefined`, `redirectedFrom?: string` (set when the commit came from a `redirect()` chain).
+- **`getChainPrefixes` / `chainParams`** — `(snapshot) => string[]` / `(snapshot) => Readonly<Record<string,string>>`. Prefix-match active links and breadcrumbs. `chainParams` picks `params` / `partialParams` based on status; consistent with `snapshot.chain` on error.
 - **`UrlAdapter`** — `href`, `historyState`, `replaceState` are **required** methods. Adapters that don't track state return `null` / no-op. `HrefOptions.search?: string` for SSR hash mode.
 - **`FileMeta.load` / `FileMeta.preload`** — typed conventions. `load: () => Promise<unknown>` — signal-free. `preload: (ctx: PreloadContext) => void | Promise<unknown>` — `ctx.signal` aborts on detach.
 - **`NavigationType`** — `'initial' | 'push' | 'replace' | 'pop' | 'revalidate'`. The transaction source, not a direction.

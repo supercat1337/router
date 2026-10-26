@@ -662,7 +662,7 @@ function urlPrefixes(chain, snapshot, keysMap) {
     } else if (key.startsWith(":")) {
       const name = key.slice(1);
       const params = chainParams(snapshot);
-      prefix = parentPrefix + "/" + (params[name] ?? "");
+      prefix = parentPrefix + "/" + encodeURIComponent(params[name] ?? "");
     } else {
       prefix = parentPrefix + "/" + key;
     }
@@ -723,10 +723,8 @@ function buildErrorSnapshot(navigationId, prev, type, extra, url, navigationType
       map: prev.map,
       status: "error",
       chain: prev.chain,
-      // already frozen
       params: Object.freeze({}),
       partialParams: chainParams(prev),
-      // already frozen (prev.params / prev.partialParams)
       search: prev.search ?? Object.freeze({}),
       url,
       leaf: prev.leaf,
@@ -1273,11 +1271,8 @@ function createGuardLayer(options) {
        * @returns {string}
        */
       url(name, ...args) {
-        return r.url(
-          name,
-          .../** @type {[params?: Record<string, string>]} */
-          args
-        );
+        return r.url(name, .../** @type {[params?: Record<string, string>]} */
+        args);
       }
     };
   }

@@ -260,3 +260,36 @@ export declare function isRouter(x: unknown): x is Router;
  * @public
  */
 export declare function isRoute(x: unknown): x is Route;
+
+/**
+ * URL prefixes for each node in `snapshot.chain`, in top-down order
+ * (root-most first). `prefixes[i]` is the Router-relative pathname down
+ * to `snapshot.chain[i]`.
+ *
+ * Use for **prefix-matching** active links (a `<NavLink>` is active when
+ * `snapshot.url` starts with the link's prefix) and breadcrumbs. For
+ * strict RRU equality, use `snapshot.url` directly (see
+ * `attachActiveLinks`).
+ *
+ * Search is not included — pathname only. `:name` segments are encoded
+ * with `encodeURIComponent` — the canonical encoding produced by
+ * `map.url()` / `router.url()`.
+ *
+ * Empty chain (`notFound` at the root) → `[]`. On error snapshots, returns
+ * the prefixes of the previous committed state.
+ *
+ * @public
+ */
+export declare function getChainPrefixes(snapshot: Snapshot): string[];
+
+/**
+ * `:name` params of `snapshot.chain`. Returns `params` when
+ * `status === 'matched'`, `partialParams` otherwise (including `error`).
+ *
+ * Always returns a frozen object. On `error` snapshots, returns the params
+ * of the previous committed snapshot — consistent with `snapshot.chain` /
+ * `snapshot.map` / `snapshot.leaf`, which also point to the previous state.
+ *
+ * @public
+ */
+export declare function chainParams(snapshot: Snapshot): Readonly<Record<string, string>>;

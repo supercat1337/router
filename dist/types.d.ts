@@ -62,6 +62,18 @@ export declare interface AttachPreloadOptions {
 }
 
 /**
+ * `:name` params of `snapshot.chain`. Returns `params` when
+ * `status === 'matched'`, `partialParams` otherwise (including `error`).
+ *
+ * Always returns a frozen object. On `error` snapshots, returns the params
+ * of the previous committed snapshot — consistent with `snapshot.chain` /
+ * `snapshot.map` / `snapshot.leaf`, which also point to the previous state.
+ *
+ * @public
+ */
+export declare function chainParams(snapshot: Snapshot): Readonly<Record<string, string>>;
+
+/**
  * Valid children of a `folder` node or of a top-level map.
  *
  * Keys are URL-segment patterns: literal (`[A-Za-z0-9._~-]+`), `:name`,
@@ -365,6 +377,27 @@ export declare interface FolderOptions {
     /** Application-owned metadata; passed through unchanged. */
     [key: string]: any;
 }
+
+/**
+ * URL prefixes for each node in `snapshot.chain`, in top-down order
+ * (root-most first). `prefixes[i]` is the Router-relative pathname down
+ * to `snapshot.chain[i]`.
+ *
+ * Use for **prefix-matching** active links (a `<NavLink>` is active when
+ * `snapshot.url` starts with the link's prefix) and breadcrumbs. For
+ * strict RRU equality, use `snapshot.url` directly (see
+ * `attachActiveLinks`).
+ *
+ * Search is not included — pathname only. `:name` segments are encoded
+ * with `encodeURIComponent` — the canonical encoding produced by
+ * `map.url()` / `router.url()`.
+ *
+ * Empty chain (`notFound` at the root) → `[]`. On error snapshots, returns
+ * the prefixes of the previous committed state.
+ *
+ * @public
+ */
+export declare function getChainPrefixes(snapshot: Snapshot): string[];
 
 /**
  * A guard: sync or async, returns `Decision`.

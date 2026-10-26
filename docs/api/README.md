@@ -24,6 +24,13 @@
 | `hasRoute`           | `(map, name) → boolean`             | Route-name existence check.              |
 | `MapValidationError` | `class`                             | `createMap` invariant violations.        |
 
+### Chain utilities
+
+| Name               | Signature                                      | Purpose                                                                                      |
+| :----------------- | :--------------------------------------------- | :------------------------------------------------------------------------------------------- |
+| `getChainPrefixes` | `(snapshot) → string[]`                        | URL prefix for each `snapshot.chain` node — for prefix-matching active links and breadcrumbs |
+| `chainParams`      | `(snapshot) → Readonly<Record<string,string>>` | `:name` params of the chain — `params` when matched, `partialParams` otherwise               |
+
 ### Brand checks
 
 | Name         | Signature                   |

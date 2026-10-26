@@ -1,5 +1,7 @@
 // @ts-check
 
+import { kKeysMap } from './map.js';
+
 /**
  * @typedef {import('./types.js').Snapshot} Snapshot
  * @typedef {import('./types.js').Node} Node
@@ -9,12 +11,53 @@
  */
 
 /**
- * @internal
+ * `:name` params of `snapshot.chain`. Convenience for generic code that
+ * works on both matched and notFound snapshots — returns `params` when
+ * `status === 'matched'`, `partialParams` otherwise (including `error`).
+ *
+ * Always returns a frozen object. For `error` snapshots, returns the
+ * params of the previous committed snapshot — consistent with
+ * `snapshot.chain` / `snapshot.map` / `snapshot.leaf`.
+ *
+ * @public
  * @param {Snapshot} snapshot
- * @returns {Record<string, string>}
+ * @returns {Readonly<Record<string, string>>}
  */
 export function chainParams(snapshot) {
     return snapshot.status === 'matched' ? snapshot.params : snapshot.partialParams;
+}
+
+/**
+ * URL prefixes for each node in `snapshot.chain`, in top-down order
+ * (root-most first). `prefixes[i]` is the Router-relative pathname down
+ * to `snapshot.chain[i]`.
+ *
+ * `/admin/users/5/edit` with chain `[adminFolder, usersFolder, :idFolder, editFile]`
+ * → `['/admin', '/admin/users', '/admin/users/5', '/admin/users/5/edit']`.
+ *
+ * Use for **prefix-matching** active links (a `<NavLink>` is active when
+ * `snapshot.url` starts with the link's prefix) and breadcrumbs. For
+ * strict RRU equality, use `snapshot.url` directly.
+ *
+ * Search is **not** included — pathname only. `:name` segments are encoded
+ * with `encodeURIComponent` — the canonical encoding produced by
+ * `map.url()` / `router.url()`. For URLs built via those helpers, prefix
+ * matching with `startsWith` works even for values containing `/`, `?`,
+ * `#`. Manually-built URLs with non-canonical encoding (e.g. `/users/%35`
+ * vs `/users/5`) may not prefix-match.
+ *
+ * Empty chain (`notFound` at the root) → `[]`. On error snapshots,
+ * returns the prefixes of the previous committed state — consistent with
+ * `snapshot.chain` / `snapshot.map` / `snapshot.leaf`.
+ *
+ * @public
+ * @param {Snapshot} snapshot
+ * @returns {string[]}
+ */
+export function getChainPrefixes(snapshot) {
+    const km = /** @type {any} */ (snapshot.map)[kKeysMap];
+    const keysMap = km instanceof WeakMap ? km : new WeakMap();
+    return urlPrefixes(snapshot.chain, snapshot, keysMap);
 }
 
 /**
@@ -51,7 +94,11 @@ export function urlPrefixes(chain, snapshot, keysMap) {
         } else if (key.startsWith(':')) {
             const name = key.slice(1);
             const params = chainParams(snapshot);
-            prefix = parentPrefix + '/' + (params[name] ?? '');
+            // Encode :name values canonically — matches `map.url()` output.
+            // Handles IDs containing '/', '?', '#'. Non-canonical input URLs
+            // (e.g. `/users/%35` vs `/users/5`) are accepted at the router
+            // level, but prefix matching then relies on the caller's encoding.
+            prefix = parentPrefix + '/' + encodeURIComponent(params[name] ?? '');
         } else {
             prefix = parentPrefix + '/' + key;
         }
@@ -155,9 +202,9 @@ export function buildErrorSnapshot(navigationId, prev, type, extra, url, navigat
             navigationType,
             map: prev.map,
             status: 'error',
-            chain: prev.chain, // already frozen
+            chain: prev.chain,
             params: Object.freeze({}),
-            partialParams: chainParams(prev), // already frozen (prev.params / prev.partialParams)
+            partialParams: chainParams(prev),
             search: prev.search ?? Object.freeze({}),
             url,
             leaf: prev.leaf,
