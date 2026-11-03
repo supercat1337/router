@@ -12,7 +12,9 @@
 export function bench(label, fn, opts = {}) {
     const iterations = opts.iterations ?? 100_000;
     const warmup = opts.warmup ?? Math.min(10_000, iterations);
-    const runs = opts.runs ?? 5;
+    // 10 runs → p90 = second-to-last of sorted 10, an honest tail indicator.
+    // 5 runs would make p90 ≈ max, which is noise, not a percentile.
+    const runs = opts.runs ?? 10;
 
     // Sink: accumulator that prevents DCE. Kept live via a final check.
     let sink = 0;
@@ -29,6 +31,9 @@ export function bench(label, fn, opts = {}) {
 
     times.sort((a, b) => a - b);
     const median = times[Math.floor(times.length / 2)];
+    const min = times[0];
+    // p90 of n samples → index floor((n-1) * 0.9). At n=10 → 9th of 10.
+    const p90 = times[Math.floor((times.length - 1) * 0.9)];
 
     // Prevent DCE of the whole measurement loop.
     if (sink === Number.MIN_SAFE_INTEGER) {
@@ -40,7 +45,8 @@ export function bench(label, fn, opts = {}) {
         iterations,
         runs,
         medianMs: median,
-        minMs: times[0],
+        minMs: min,
+        p90Ms: p90,
         nsPerOp: (median * 1e6) / iterations,
         opsPerSec: (iterations * 1000) / median,
     };

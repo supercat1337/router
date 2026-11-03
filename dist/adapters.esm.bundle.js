@@ -130,9 +130,7 @@ function createHashAdapter({ base } = {}) {
     base: resolvedBase,
     read() {
       if (typeof location === "undefined") {
-        throw new TypeError(
-          "createHashAdapter.read(): no `location` (SSR). Pass an explicit adapter or use memory mode."
-        );
+        return "/";
       }
       const hash = location.hash.slice(1);
       if (!hash.startsWith("/") || hash.includes("#")) {

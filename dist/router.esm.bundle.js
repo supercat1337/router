@@ -490,7 +490,16 @@ function collectTree(children, pathPrefix, seenNames, keyMap, leafParams, urlTem
       throw new MapValidationError("node-not-constructed", childPath);
     }
     keyMap.set(child, key);
-    const childParams = key.startsWith(":") ? [...parentParams, key.slice(1)] : parentParams;
+    let childParams;
+    if (key.startsWith(":")) {
+      const paramName = key.slice(1);
+      if (parentParams.includes(paramName)) {
+        throw new MapValidationError("param-duplicate", childPath);
+      }
+      childParams = [...parentParams, paramName];
+    } else {
+      childParams = parentParams;
+    }
     if (isFile(child)) {
       if (seenNames.has(child.name)) {
         throw new MapValidationError("name-duplicate", childPath);

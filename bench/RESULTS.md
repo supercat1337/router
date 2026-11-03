@@ -4,66 +4,99 @@
 
 **Environment:** Node v24.14.0, win32/x64
 
-## What this measures — and what it does not
+## Methodology
 
-This is **not** a "faster than React Router" benchmark — different contract,
-different tradeoffs. We measure the **cost of the synchronous core**, not a
-"we win" claim. There is no comparison to framework routers: they solve a
-different problem (async loaders, framework-bound ergonomics).
-
-Qualitative differences (atomicity, predictability, no loading state) are in
-[`README.md`](../README.md), not here — they are a contract, not a number.
+- **10 runs** per scenario, first run discarded as warmup.
+- **Median** is reported (primary); **p90** shows the tail.
+- **Same iteration count within a group.** Cross-group counts differ
+  (e.g. 1M for `map.match`, 100k for `navigate`) — compare within a group,
+  not across.
+- **`adapter.write` uses `createMemoryAdapter`** — a single `let` assignment.
+  Real path/hash adapters call `history.pushState` and are orders of
+  magnitude slower. The number here is a **lower bound**, not representative.
+- **No `--expose-gc`, no forced GC between runs.** V8 state carries over.
+- **Absolute timings are machine-dependent.** Compare against your own runs.
 
 ## Results
 
-| Scenario                         | Iterations |     Median |  ns/op |  ops/s |
-| -------------------------------- | ---------: | ---------: | -----: | -----: |
-| adapter.write (baseline)         |  1,000,000 |   26.72 ms |     27 | 37.42M |
-| normalizeRRU                     |  1,000,000 |   61.28 ms |     61 | 16.32M |
-| map.match (1000 routes, depth 3) |  1,000,000 | 1755.47 ms |   1755 | 569.6k |
-| navigate (100 routes)            |    100,000 |  379.99 ms |   3800 | 263.2k |
-| revalidate (no URL change)       |    100,000 |  283.43 ms |   2834 | 352.8k |
-| createMap (100 flat)             |     10,000 |  621.76 ms |  62176 |  16.1k |
-| createMap (1000 flat)            |      1,000 |  788.82 ms | 788817 |   1.3k |
-| navigate (5-hop redirect)        |     10,000 |  105.30 ms |  10530 |  95.0k |
-| map.match (1000 routes, flat)    |    100,000 |  105.21 ms |   1052 | 950.5k |
-| map.url (1000 deep)              |    100,000 |   11.74 ms |    117 |  8.52M |
-| navigate (10 subscribers)        |     50,000 |  198.96 ms |   3979 | 251.3k |
-| navigate (1000 deep)             |     50,000 |  250.72 ms |   5014 | 199.4k |
+| Scenario | Iterations | Median | p90 | ns/op | ops/s |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| adapter.write (baseline) | 1,000,000 | 23.66 ms | 28.15 ms | 24 | 42.27M |
+| normalizeRRU | 1,000,000 | 61.12 ms | 66.00 ms | 61 | 16.36M |
+| map.match (1000 routes, depth 3) | 1,000,000 | 1840.43 ms | 1890.37 ms | 1840 | 543.4k |
+| navigate (100 routes) | 100,000 | 397.36 ms | 429.72 ms | 3974 | 251.7k |
+| revalidate (no URL change) | 100,000 | 321.24 ms | 323.10 ms | 3212 | 311.3k |
+| createMap (100 flat) | 10,000 | 618.10 ms | 628.50 ms | 61810 | 16.2k |
+| createMap (1000 flat) | 1,000 | 785.68 ms | 789.16 ms | 785675 | 1.3k |
+| navigate (5-hop redirect) | 10,000 | 105.20 ms | 108.72 ms | 10520 | 95.1k |
+| map.match (1000 routes, flat) | 1,000,000 | 1055.88 ms | 1063.41 ms | 1056 | 947.1k |
+| map.match (10 routes) | 1,000,000 | 949.09 ms | 979.81 ms | 949 | 1.05M |
+| map.url (1000 deep) | 1,000,000 | 94.52 ms | 101.04 ms | 95 | 10.58M |
+| map.url (1000 flat) | 1,000,000 | 99.17 ms | 104.40 ms | 99 | 10.08M |
+| navigate (10 subscribers) | 100,000 | 393.39 ms | 398.41 ms | 3934 | 254.2k |
+| navigate (1000 deep) | 100,000 | 465.91 ms | 472.98 ms | 4659 | 214.6k |
+| createRouter (100 routes) | 10,000 | 33.01 ms | 34.45 ms | 3301 | 303.0k |
 
 ## Interpreting the numbers
 
-**`map.url` is O(1).** Templates are precomputed at `createMap` time
-(`'/users/:id/edit'` → a parts array). `url(name, params)` is O(template
-length), not O(N). Previously a full tree traversal — now **~247× faster**
-on a 1000-leaf tree. This is what unblocks `router-react`'s `<Link>`, which
+**`map.url` is O(template length), not O(map size).** Templates are
+precomputed at `createMap` time (`'/users/:id/edit'` → a parts array).
+`url(name, params)` walks the template — independent of how many routes
+the map contains. This is what unblocks `router-react`'s `<Link>`, which
 calls `url()` on every render for every link.
+Flat (1 part): 99 ns; deep (3 parts): 95 ns — within run-to-run noise (-5%). Either way, both are ~97 ns — template length adds at most a few ns per part, below measurement precision at this scale. What matters: neither depends on the 1000-entry map.
 
-**`map.match` is O(depth × branching), for both flat and deep maps.**
-At `createMap` time, each folder gets an index (`Map<literal, node>` + a
-single param slot + a wildcard slot + an index slot). `walk()` uses
-`Map.get` instead of allocating `Object.keys` on every step. A 1000-route
-**flat** map is now **~1 236 ns** per match (was 80 861 ns — **65× faster**).
-Flat and deep are indistinguishable in practice; choose structure for
-semantics, not performance.
+**`map.match` is O(depth).** At `createMap` time, each folder gets an
+index: `Map<literal, node>` plus single slots for param, wildcard, and
+index. `walk()` does one `Map.get` per level — no linear scan, no
+`Object.keys` allocation per step.
+Flat (1 level) vs depth-3: 1056 ns vs 1840 ns — flat is 43% faster, roughly 392 ns per extra depth level. Both are sub-2µs — invisible at human click rates.
 
-**`createMap` is ~1.6× slower** than before — it now builds two indexes
-(`urlTemplates`, `folderIndex`) in a single pass. One-time cost, repaid on
-every subsequent `url()` and `match()`. For SSR: cache maps across requests
-(you should anyway).
+**Small maps get no proportional speedup.** The folder index makes
+`Map.get` O(1), so a smaller map barely helps — the floor is fixed
+overhead (`normalizeRRU`, query parsing, `splitSegments`, `walk`
+recursion, snapshot allocation), not tree size.
+A 10-route map costs 949 ns — only 10% faster than a 1000-route flat map (1056 ns) despite 100× fewer routes.
 
-**Event subscribers are cheap.** 10 subscribers add ~487 ns per `navigate`
-on a 100-route flat map — **~10 ns per subscriber per event**. Events are
-not the bottleneck.
+Fixed floor is ~949 ns. Optimizing `FolderIndex` further would not help; optimizing the fixed path would — and for most apps, it's already below human click rates.
 
-**`navigate` is dominated by `match` plus fixed transaction cost.** On a
-100-route flat map: ~3 795 ns total, of which ~124 ns is `match` — the rest
-is snapshot build, chain diff, five events, `adapter.write`. On a 1000-route
-deep map: ~4 988 ns total (~1 662 ns `match` + ~3 326 ns fixed).
+**`createMap` builds two indexes** (`urlTemplates`, `folderIndex`) in a
+single pass. One-time cost, repaid on every subsequent `url()` and
+`match()`. For SSR: cache maps across requests (you should anyway).
 
-**`adapter.write` is the floor.** 26 ns. `navigate` at ~3.8 µs is ~146×
-that floor. For a user clicking links ~once per second, three orders of
-magnitude of headroom.
+**Event subscribers are cheap.**
+10 subscribers show no measurable overhead at this run — the difference (40 ns) is within run-to-run noise. The per-subscriber cost is real (it scales linearly) but small relative to the fixed transaction cost; at typical counts (<10) it stays well below the human click budget.
+Events are not the bottleneck.
+
+**`navigate` is dominated by fixed transaction cost.** Snapshot build,
+chain diff, five events, `adapter.write` — together far outweigh `match`.
+On a 100-route flat map: 3974 ns per navigate. For reference, `map.match` alone on a 1000-route flat map is 1056 ns — the transaction overhead is the rest.
+On a 1000-route deep map: 4659 ns total (1840 ns `match` + 2819 ns fixed).
+That is the price of atomicity and a synchronous contract — and it is
+orders of magnitude below human interaction rates.
+
+**`createRouter` boot** (initial transaction): 3301 ns per call — what SSR pays per request, on top of `createMap` (cache the map if you can).
+
+**`adapter.write` is the floor.** See methodology — lower bound, not
+representative of browser adapters.
+
+## What this does not cover
+
+**This does not claim to be the fastest match implementation.** A minimal
+regex router can match a path in 200–500 ns; this router pays ~1 µs for
+`normalizeRRU`, segment decoding, snapshot allocation, and the
+chain/snapshot contract. For the cost of a full navigation cycle —
+including framework render — the router is 1–2 orders of magnitude cheaper
+than async framework routers, because it does none of the framework work.
+
+This is **not** a "faster than React Router" benchmark — different
+contract, different tradeoffs. We measure the **cost of the synchronous
+core**, not a "we win" claim.
+
+No comparison to framework routers: they solve a different problem
+(async loaders, framework-bound ergonomics). Qualitative differences
+(atomicity, predictability, no loading state) are in
+[`README.md`](../README.md), not here — they are a contract, not a number.
 
 ## How to run
 
@@ -71,6 +104,3 @@ magnitude of headroom.
 npm run build    # ensure dist/ exists
 npm run bench    # writes this file
 ```
-
-Numbers are machine-dependent. Absolute values will differ on your hardware —
-compare against your own runs, not against this snapshot.

@@ -741,7 +741,9 @@ function createMap(data, options) {
         },
         route(/** @type {string} */ name) {
             const cached = routeCache.get(name);
-            if (cached) {return /** @type {any} */ (cached);}
+            if (cached) {
+                return /** @type {any} */ (cached);
+            }
             const params = leafParams.get(name);
             if (params === undefined) {
                 throw new TypeError(`route(): route ${JSON.stringify(name)} not found in this map`);
@@ -816,7 +818,20 @@ function collectTree(
             throw new MapValidationError('node-not-constructed', childPath);
         }
         keyMap.set(child, key);
-        const childParams = key.startsWith(':') ? [...parentParams, key.slice(1)] : parentParams;
+        // `:name` may appear at most once per root-to-leaf chain. A duplicate
+        // silently loses the earlier value in `walk` (`{ ...params, name: seg }`
+        // — last-wins), while `route.params` and typings still see one entry.
+        // Reject it at construction.
+        let childParams;
+        if (key.startsWith(':')) {
+            const paramName = key.slice(1);
+            if (parentParams.includes(paramName)) {
+                throw new MapValidationError('param-duplicate', childPath);
+            }
+            childParams = [...parentParams, paramName];
+        } else {
+            childParams = parentParams;
+        }
 
         if (isFile(child)) {
             if (seenNames.has(child.name)) {
@@ -873,8 +888,12 @@ function defaultMessageFor(code, path) {
  * @returns {boolean}
  */
 function hasRoute(map, name) {
-    if (!map || typeof map !== 'object') {return false;}
-    if (typeof name !== 'string' || name.length === 0) {return false;}
+    if (!map || typeof map !== 'object') {
+        return false;
+    }
+    if (typeof name !== 'string' || name.length === 0) {
+        return false;
+    }
     const fn = /** @type {any} */ (map)[kHasRoute];
     return typeof fn === 'function' ? fn(name) : false;
 }
@@ -887,12 +906,18 @@ function hasRoute(map, name) {
  */
 function hasRouteImpl(children, name) {
     for (const key of Object.keys(children)) {
-        if (key === '*') {continue;}
+        if (key === '*') {
+            continue;
+        }
         const child = children[key];
         if (isFile(child)) {
-            if (child.name === name) {return true;}
+            if (child.name === name) {
+                return true;
+            }
         } else if (isFolder(child)) {
-            if (hasRouteImpl(child.children, name)) {return true;}
+            if (hasRouteImpl(child.children, name)) {
+                return true;
+            }
         }
     }
     return false;

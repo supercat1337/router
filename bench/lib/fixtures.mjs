@@ -41,6 +41,10 @@ export function makeDeepMap(n, h) {
 
 /**
  * Minimal in-memory UrlAdapter — no DOM, no history.
+ * `write` is a single `let` assignment: this is the **lower bound** for
+ * adapter.write cost. Real path/hash adapters call `history.pushState`,
+ * which is orders of magnitude slower. See bench/RESULTS.md → Methodology.
+ *
  * @param {string} [initial]
  */
 export function makeMemoryAdapter(initial = '/') {
