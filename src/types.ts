@@ -876,7 +876,8 @@ export type MapValidationErrorCode =
     | 'notFound-missing'
     | 'notFound-invalid'
     | 'name-duplicate'
-    | 'node-not-constructed';
+    | 'node-not-constructed'
+    | 'param-duplicate';
 
 // =============================================================================
 // Guard layer

@@ -29,9 +29,9 @@ function validateBase(base) {
  * SSR without `location`, an explicit `base` is required.
  *
  * `read` returns a valid RRU or `/`. `/` when the hash does not start with
- * `/` (e.g. `#section`) or contains a second `#` (`#/users#section`).
- * `read` in SSR throws `TypeError`.
- *
+ * `/` (e.g. `#section`), contains a second `#` (`#/users#section`), or
+ * `location` is unavailable (SSR) — unified with path mode.
+ * 
  * `href` builds a Browser URL from an RRU. The search defaults to
  * `location.search`; override via `opts.search` in SSR (where `location`
  * is absent). `opts.search` must be `''` or start with `?`.
@@ -60,12 +60,7 @@ export function createHashAdapter({ base } = {}) {
         base: resolvedBase,
 
         read() {
-            if (typeof location === 'undefined') {
-                throw new TypeError(
-                    'createHashAdapter.read(): no `location` (SSR). ' +
-                        'Pass an explicit adapter or use memory mode.'
-                );
-            }
+            if (typeof location === 'undefined') {return '/';}
             const hash = location.hash.slice(1);
             if (!hash.startsWith('/') || hash.includes('#')) {return '/';}
             return hash;

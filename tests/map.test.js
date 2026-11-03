@@ -99,6 +99,69 @@ test('createMap: name-duplicate', t => {
     }
 });
 
+test('createMap: param-duplicate in nested chain', t => {
+    try {
+        createMap(
+            {
+                users: folder({
+                    ':id': folder({
+                        posts: folder({
+                            ':id': file({ name: 'userPost' }),
+                        }),
+                    }),
+                }),
+            },
+            { notFound: nf }
+        );
+        t.fail('expected throw');
+    } catch (e) {
+        t.true(e instanceof MapValidationError);
+        t.is(/** @type {MapValidationError} */ (e).code, 'param-duplicate');
+        t.is(/** @type {MapValidationError} */ (e).path, '/users/:id/posts/:id');
+    }
+});
+
+test('createMap: param-duplicate at adjacent levels', t => {
+    try {
+        createMap(
+            { ':id': folder({ ':id': file({ name: 'user' }) }) },
+            { notFound: nf }
+        );
+        t.fail('expected throw');
+    } catch (e) {
+        t.true(e instanceof MapValidationError);
+        t.is(/** @type {MapValidationError} */ (e).code, 'param-duplicate');
+        t.is(/** @type {MapValidationError} */ (e).path, '/:id/:id');
+    }
+});
+
+test('createMap: distinct params in chain are OK', t => {
+    t.notThrows(() =>
+        createMap(
+            {
+                users: folder({
+                    ':id': folder({
+                        posts: folder({ ':postId': file({ name: 'userPost' }) }),
+                    }),
+                }),
+            },
+            { notFound: nf }
+        )
+    );
+});
+
+test('createMap: same :name in separate branches is OK', t => {
+    t.notThrows(() =>
+        createMap(
+            {
+                a: folder({ ':id': file({ name: 'a' }) }),
+                b: folder({ ':id': file({ name: 'b' }) }),
+            },
+            { notFound: nf }
+        )
+    );
+});
+
 test('map.url: literal route', t => {
     const m = createMap({ login: file({ name: 'login' }) }, { notFound: nf });
     t.is(m.url('login'), '/login');

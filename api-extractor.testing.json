@@ -25,7 +25,7 @@
         "extractorMessageReporting": {
             "default": { "logLevel": "warning" },
             "ae-missing-release-tag": { "logLevel": "none" },
-            "ae-forgotten-export": { "logLevel": "none" }
+            "ae-forgotten-export": { "logLevel": "error" }
         },
         "tsdocMessageReporting": {
             "default": { "logLevel": "none" }

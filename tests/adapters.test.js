@@ -233,11 +233,11 @@ test("hash adapter: read empty hash → '/'", t => {
     t.is(a.read(), '/');
 });
 
-test('hash adapter: read SSR throws', t => {
+test("hash adapter: read SSR returns '/'", t => {
     const dom = installDom();
     const a = createHashAdapter({ base: '/app/' });
     dom.teardown();
-    t.throws(() => a.read(), { instanceOf: TypeError });
+    t.is(a.read(), '/');
 });
 
 test('hash adapter: write push', t => {

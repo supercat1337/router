@@ -31,7 +31,7 @@ import {
     RouteNameOf,
     RouteParamsOf,
     Snapshot,
-} from './types.ts';
+} from './types.js';
 
 export type {
     // Direct — appear in `createTestRouter` / `MemoryAdapter` signatures.

@@ -248,7 +248,7 @@ export class MapValidationError extends Error {
 }
 
 // @public
-export type MapValidationErrorCode = 'data-not-object' | 'data-key-invalid' | 'index-at-root' | 'notFound-missing' | 'notFound-invalid' | 'name-duplicate' | 'node-not-constructed';
+export type MapValidationErrorCode = 'data-not-object' | 'data-key-invalid' | 'index-at-root' | 'notFound-missing' | 'notFound-invalid' | 'name-duplicate' | 'node-not-constructed' | 'param-duplicate';
 
 // @public
 export type MatchResult = {
