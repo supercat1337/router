@@ -74,3 +74,55 @@ const { router } = createTestRouter({
 const { router } = createTestRouter({ map, dev: false });
 t.is(router.navigate('/missing').status, 'notFound');
 ```
+
+`writeCalls` описан в таблице, но не показан в паттернах. Один блок:
+
+**History writes** — assert push vs replace:
+
+```js
+router.navigate('/profile');
+router.replace('/profile');
+t.deepEqual(adapter.writeCalls, [
+    { url: '/profile', mode: 'push' },
+    { url: '/profile', mode: 'replace' },
+]);
+
+adapter.reset();
+t.deepEqual(adapter.writeCalls, []); // current URL preserved: '/profile'
+```
+
+## What `createTestRouter` does not wire
+
+`createTestRouter` wraps `createRouter` — **not** `createGuardedRouter`. Guards
+do not run. `nav.navigate` / `nav.replace` do not exist on the returned object.
+
+For guarded-navigation tests, wire manually with `createMemoryAdapter`:
+
+```js
+import { createGuardedRouter } from '@supercat1337/router/guard';
+import { createMemoryAdapter } from '@supercat1337/router/testing';
+
+const adapter = createMemoryAdapter('/login');
+const { router, nav } = createGuardedRouter({
+    adapter,
+    resolveMap: () => map,
+    getState: () => ({}),
+    guards: [() => 'allow'],
+    dev: true,
+});
+
+const result = await nav.navigate('/admin');
+t.is(result.status, 'committed');
+```
+
+`createMemoryAdapter` is the only piece from `/testing` you need here — it
+implements the full `UrlAdapter` contract, including `trigger()` and
+`writeCalls`.
+
+## See also
+
+- [`AGENTS.md`](../../AGENTS.md) — Testing section. AVA conventions, the `test.serial` requirement for global mutations, and the "use `createTestRouter`, not a custom adapter" rule.
+- [`docs/concepts/transactions.md`](../concepts/transactions.md) — what most tests exercise: the LOOP, contract violations, error behavior.
+- [`docs/concepts/snapshots.md`](../concepts/snapshots.md) — what `router.getSnapshot()` returns; most assertions in these tests are against it.
+- [`docs/api/guard.md`](guard.md) — `createTestRouter` does **not** wire guards (see below). For guarded-navigation tests, use `createGuardedRouter` directly with `createMemoryAdapter`.
+- [`docs/api/README.md`](README.md) — general API reference.

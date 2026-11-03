@@ -28,8 +28,11 @@ git clone https://github.com/supercat1337/router.git
 cd router
 npm ci
 npm test              # typecheck + tests (AVA)
+npm run preflight     # lint:strict → build → bundle-size:check → test → check-links
 ```
 
+`npm test` is the fast loop; `npm run preflight` is the full gate — same
+check that `npm publish` runs. Run it before opening a PR.
 **No CI. No git hooks.** This is deliberate — the package can be mirrored
 on any git host (gitverse, gitlab, sourcehut), and the workflow shouldn't
 depend on GitHub Actions. Everything runs locally.
@@ -100,18 +103,44 @@ table in `README.md`. Commit both together.
 `npm publish` runs `prepublishOnly` → `preflight`:
 
 ```
-build → bundle-size:check → test → check-links
+lint:strict → build → bundle-size:check → test → check-links
 ```
 
 If any step fails, publish is aborted. Contributors don't publish — the
 maintainer does. But `npm run preflight` is the same check, and running it
 before a PR is a good idea.
 
+## Release
+
+Versions follow [`VERSIONING.md`](VERSIONING.md). The maintainer-only flow:
+
+```sh
+npm run changeset          # 1. describe the change (patch/minor/major)
+git add . && git commit -m "feat: ..."   # 2. commit code + changeset
+
+# 3. when ready to release:
+npm run version-packages   # bumps package.json, writes CHANGELOG.md
+git add . && git commit -m "chore: version packages"
+npm run publish-packages   # preflight → changeset publish
+```
+
+Contributors do not run `npm run version-packages` or `npm run
+publish-packages` — they only write changesets (`npm run changeset`) for
+changes that affect the public API, runtime behavior, or the published
+`.d.ts`. Doc-only changes (`docs/**`, `README.md`, `AGENTS.md`,
+`CONTRIBUTING.md`, `SECURITY.md`, `VERSIONING.md`) do not need a changeset.
+
+Under `0.x`, a minor bump may include edge-case breaking changes (see
+`VERSIONING.md` → _Breaking policy under 0.x_). A breaking change must be
+an actively harmful edge case (silent data loss, contract violation), not
+a new feature that happens to be incompatible.
+
 ## Communication
 
 - **Issues** — bugs, proposals, questions. No SLA; I respond when I can.
 - **PRs** — small, focused, with a test. Large refactors get closed.
-- **Discussions** — not enabled yet. Ask in an issue.
+- **Discussions** — enabled. Use it for "how do I…", show-and-tell, and
+  open-ended ideas. Issues stay for concrete bugs and proposals.
 
 ## License
 

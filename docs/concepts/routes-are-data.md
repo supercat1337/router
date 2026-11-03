@@ -68,6 +68,7 @@ Three fallback behaviors are visible side by side:
 | `notFound-invalid`     | `options.notFound` is not a function                     |
 | `name-duplicate`       | the same `file({ name })` appears twice                  |
 | `node-not-constructed` | a value is not a `file` / `folder` brand                 |
+| `param-duplicate`      | the same `:name` appears twice in a root-to-leaf chain   |
 
 `folder` enforces subtree-shape invariants and throws `TypeError`:
 
@@ -95,6 +96,16 @@ const map = createMap(
 map.match('/admin/missing'); // → handler = admin.notFound
 map.match('/outside'); // → handler = map.notFound
 ```
+
+## Matching semantics
+
+Three rules that follow from the tree shape, all enforced by tests in `tests/map.test.js` and `tests/match-edge.test.js`:
+
+**Precedence at one level: literal > `:name` > `*`.** The literal wins deterministically — there is **no backtracking** to `:name` if the literal matches but the tail does not. Given `users: folder({ new: file(...), ':id': file(...) })`, the URL `/users/new/extra` is `notFound`: the literal `new` wins over `:id`, and since `new` is a file (no children), the extra segment fails. It does **not** fall through to `:id` with `id = 'new'`.
+
+**`*` matches any remaining path.** The matched path is **not** exposed in `params` (wildcards have no `:name`), and the original percent-encoding is preserved in `snapshot.url`. Wildcards have no canonical URL: `map.url(name)` for a `*`-keyed file throws `TypeError`. Use `getChainPrefixes(snapshot)` to derive the prefix URL — the wildcard prefix is the full pathname without query.
+
+**Matching is case-sensitive.** `/Login` does not match the `login` key. There is no case-folding, no locale-aware normalization. Keys are compared verbatim after percent-decoding.
 
 ## See also
 

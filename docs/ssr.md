@@ -5,7 +5,7 @@ The core is synchronous; SSR is a natural fit.
 ## Adapters
 
 - **`createPathAdapter({ base })`** — explicit `base` is required in SSR (`TypeError` otherwise). `read()` returns `'/'`, `write` / `listen` are no-ops.
-- **`createHashAdapter({ base })`** — in SSR without `location`, an explicit `base` is required. `read()` **throws** (no hash without a browser).
+- **`createHashAdapter({ base })`** — in SSR without `location`, an explicit `base` is required. `read()` returns `'/'` — unified with path mode since 0.8.0. `write` / `listen` are no-ops.
 
 ```js
 // Server
@@ -82,7 +82,7 @@ Because the core is synchronous, the initial transaction on the client runs **sy
 ## Do not
 
 - **Don't** try to connect the guard layer on the server — access control belongs in your server handler.
-- **Don't** expect `read()` to return the request URL — `createPathAdapter.read()` returns `'/'` in SSR; use `req.url` for the initial URL separately, or provide a custom adapter.
+- **Don't** expect `read()` to return the request URL — both `createPathAdapter.read()` and `createHashAdapter.read()` return `'/'` in SSR (unified since 0.8.0); use `req.url` for the initial URL separately, or provide a custom adapter.
 - **Don't** rely on `subscribe` to observe the initial commit — it fires **before** the listener attaches. Read `getSnapshot()` after `createRouter`.
 - **Don't** serialize the `Router` — serialize the state and reconstruct on the client.
 

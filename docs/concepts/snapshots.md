@@ -173,6 +173,18 @@ Use it where the **kind** of transition matters: analytics, animation direction 
 
 On error snapshots, `navigationType` reflects the **attempted** transaction, not the previous commit — a `resolver-throw` during `navigate()` produces `navigationType: 'push'`, not `'initial'`.
 
+## What error snapshots inherit from the previous state
+
+On `status === 'error'`, these fields are inherited from the **previous committed snapshot**, consistent with each other:
+
+- `chain`, `map`, `leaf` — the last successful route;
+- `params`, `partialParams` — the params in scope on the last successful route;
+- `search` — the decoded query of the last successful URL.
+
+The attempted URL's search is available only as part of `snapshot.error.attemptedUrl` (raw string), unparsed. If you need it parsed, do it yourself — the router deliberately does not mix diagnostic data (the failed attempt) with committed state (the last good snapshot).
+
+This is why `chainParams(snapshot)` and `getChainPrefixes(snapshot)` are safe to call without branching on `status` — they always refer to a real, previously committed state.
+
 Direction (back vs forward) is deliberately **not** part of `Snapshot`: it would require stateful tracking in the adapter (`history.state.__idx`), which breaks the `(state, url) → map` contract and the guard layer's rollback/redirect semantics. For back/forward direction, track `history.state` yourself or use a companion adapter package.
 
 ## See also

@@ -30,8 +30,8 @@ const adapter = createHashAdapter();
 const adapter = createHashAdapter({ base: '/app/' });
 ```
 
-- **`read()`** returns RRU or `'/'` if the hash is not RRU-shaped (`#section`, `#/users#x`). SSR: throws `TypeError` (no hash without a browser).
-- **SSR:** explicit `base` required.
+- **`read()`** returns RRU or `'/'` if the hash is not RRU-shaped (`#section`, `#/users#x`). SSR: returns `'/'` — unified with path mode since 0.8.0.
+- **SSR:** explicit `base` required; `read()` returns `'/'`, `write` / `listen` are no-ops.
 - **In-page anchors** (`#section`) in hash mode are not supported via `href` — use `scrollIntoView` after `afterEnter`.
 
 ## `href(rru, opts?) → string`

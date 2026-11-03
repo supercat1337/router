@@ -221,6 +221,36 @@ onMounted(() => {
 
 `getSnapshot()` returns a stable reference when nothing changed — required by `useSyncExternalStore`.
 
+#### Error handling: `onListenerError`
+
+`onListenerError` — the only supported path for router-level errors. Pass it to `createRouter` / `createGuardedRouter`:
+
+```js
+const router = createRouter({
+    resolveMap,
+    getState,
+    adapter,
+    onListenerError: (err, { event, snapshot }) => {
+        // event: 'beforeLeave' | 'afterLeave' | 'beforeEnter' | 'afterEnter'
+        //      | 'commit' | 'mapWillChange' | 'mapChanged' | 'navigationError'
+        reportToSentry(err, { event, url: snapshot.url });
+    },
+});
+```
+
+What it catches:
+
+- exceptions thrown by event listeners (`on` / `once` / `subscribe`),
+- reentrancy violations — `navigate` / `replace` / `revalidate` called from inside a transaction (dev: throws to caller; prod: returns current snapshot and reports here),
+- (via the guard layer) `guard-throw`, `guard-redirect-loop`, `invalid-rru`, `reentrancy`.
+
+What it does **not** catch:
+
+- `getState` / `adapter.write` throws — these propagate to the caller of `navigate` / `replace` / `revalidate`. Bootstrap (`createRouter`'s initial transaction) cannot continue; the error surfaces at construction.
+- async rejections from `afterEnter` handlers — those are unhandled promise rejections, outside the transaction. Use your own `try/catch` inside the handler (in `router-react`, `useListenerError` covers a subset — see its spec).
+
+Do **not** use `try/catch` around `navigate` / `replace` as a substitute. In prod, navigation outcomes return a `Snapshot`; they do not throw. In dev, they throw — but only on contract violations, which `onListenerError` reports in prod and which you want visible in dev.
+
 ### Type guards
 
 | Function        | Signature   | Purpose          |
@@ -268,6 +298,8 @@ History API mode. `base` required unless `<base href>` with trailing slash exist
 #### `createHashAdapter({ base? }) → UrlAdapter`
 
 Hash mode. Default `base = location.pathname`. In-page anchors (`#section`) not supported via `href`.
+
+In SSR, `read()` returns `'/'` — unified with path mode since 0.8.0. Do not wrap `hash.read()` in `try/catch`; the previous throw behavior is gone.
 
 #### `adapter.href(rru, opts?) → string`
 
@@ -470,8 +502,13 @@ router.crossMapRedirect('/admin', '/login');
 router.navigate('https://example.com/x');
 router.navigate('/x'); // ✓
 
-// ❌ navigationId as component key — use url/params instead
+// ❌ navigationId as component key — use url/params instead.
+//    `revalidate()` bumps navigationId without changing the URL, so the
+//    component remounts and loses local state on every revalidate.
 key={snapshot.navigationId}
+
+// ✅ stable key from url + params
+key={snapshot.url}
 
 // ❌ Dev-only methods in application code
 router.getHistory();
@@ -496,6 +533,15 @@ const href = router.adapter.href(router.url('userHome', { id: '5' }));
 
 // ❌ String-concatenate the base — breaks in hash mode and SSR
 const href = '/app' + router.url('userHome', { id: '5' });
+
+// ⚠️ snapshot.search on error snapshots is inherited from the PREVIOUS
+//    committed snapshot, not from the attempted URL.
+router.on('commit', ({ snapshot }) => {
+    if (snapshot.status === 'error') {
+        // snapshot.search — from the last good snapshot
+        // snapshot.error.attemptedUrl — raw string; parse it yourself
+    }
+});
 ```
 
 ## When the user asks for something the library doesn't support
