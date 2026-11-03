@@ -67,6 +67,7 @@ export interface EventPayloads {
     afterLeave: {
         suffix: Node_2[];
         snapshot: Snapshot;
+        previous: Snapshot | null;
     };
     beforeEnter: {
         suffix: Node_2[];
@@ -75,6 +76,7 @@ export interface EventPayloads {
     beforeLeave: {
         suffix: Node_2[];
         snapshot: Snapshot;
+        previous: Snapshot | null;
     };
     commit: {
         snapshot: Snapshot;

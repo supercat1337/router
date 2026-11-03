@@ -1,123 +1,149 @@
 # Scroll restoration
 
-The router does not own the DOM or `window.scrollTo`. But it exposes the
-two primitives you need: `adapter.historyState()` / `adapter.replaceState()`
-for per-history-entry state, and `snapshot.navigationType` to distinguish
-`push` / `replace` from `pop`.
+The router does not own the DOM or `scrollTo`. Scroll state belongs to
+the view layer — different apps have different containers (window, a
+`div`, a virtualized list, side-by-side panels), different axes
+(vertical / horizontal / both), different timing (immediate / after data
+load). A library cannot pick these for you.
 
-~100 lines of app code. This is a **recipe**, not a package — the correct
-behavior depends on your layout (fixed header, virtualized list, async
-content). The pattern below is a solid starting point.
+What the router provides is the primitives you combine:
 
-## The policy
+-   **`beforeLeave`** fires **before** the commit — the old DOM is still
+    mounted, so you can read `scrollTop`.
+-   **`previous`** (in the `beforeLeave` / `afterLeave` payload) — the last
+    committed snapshot. Save under `previous.url`.
+-   **`adapter.historyState()` / `adapter.replaceState(state)`** —
+    per-history-entry storage. The browser returns the same `history.state`
+    when the user goes back.
+-   **`snapshot.navigationType`** — `'pop'` restores, `'push'` / `'replace'`
+    reset, `'revalidate'` does nothing.
 
--   **`navigationType === 'pop'`** (back/forward) — restore the saved
-    scroll position for that history entry.
--   **`navigationType === 'push'` / `'replace'`** — scroll to top (or to
-    an anchor, if `snapshot.url` has one).
--   **`revalidate()`** — do **not** touch scroll. The URL didn't change;
-    the user is still on the same page.
-
-`navigationType` is the transaction source (see
-[`snapshots.md`](../concepts/snapshots.md) → `navigationType`). It is
-**not** a direction — a guard redirect during `popstate` commits via
-`router.replace()`, so its `navigationType` is `'replace'`. For scroll,
-that's correct: a redirect to a new page should not restore the previous
-scroll.
-
-## Implementation
+## The pattern
 
 ```js
-import { getChainPrefixes } from '@supercat1337/router';
+// One scroll container — a `#main` div. Adapt selector + axes to your DOM.
+const main = document.querySelector('#main');
 
-// Save scroll before a navigation commits. `beforeLeave` fires once per
-// transaction that leaves the current chain.
-router.on('beforeLeave', ({ snapshot }) => {
-    const prev = router.getSnapshot(); // still the previous committed state
-    if (prev.navigationType === 'revalidate') return;
-    const key = 'scroll:' + prev.url;
+router.on('beforeLeave', ({ previous }) => {
+    if (!previous) return; // no previous — nothing to save
+
+    // `previous.url` is the URL we are LEAVING. Read scrollTop NOW — the
+    // old page is still in the DOM. Do NOT use `snapshot.url` here — that
+    // is the new URL, and saving under it restores the wrong position on
+    // back.
+    const ctx = router.adapter.historyState() ?? {};
     router.adapter.replaceState({
-        .../** @type {object | null} */ ((router.adapter.historyState()) ?? {}),
-        [key]: { y: window.scrollY, x: window.scrollX },
+        ...ctx,
+        scroll: { x: main.scrollLeft, y: main.scrollTop },
     });
 });
 
-// Restore / reset after the new snapshot is committed.
 router.on('afterEnter', ({ snapshot }) => {
     if (snapshot.navigationType === 'revalidate') return;
 
+    // Back / forward — restore saved scroll, if any.
     if (snapshot.navigationType === 'pop') {
-        const key = 'scroll:' + snapshot.url;
-        const saved = /** @type {any} */ (router.adapter.historyState())?.[key];
+        const saved = router.adapter.historyState()?.scroll;
         if (saved) {
-            window.scrollTo(saved.x, saved.y);
+            main.scrollLeft = saved.x ?? 0;
+            main.scrollTop = saved.y ?? 0;
             return;
         }
     }
 
-    // `push` / `replace` / `pop` with no saved state → top.
-    window.scrollTo(0, 0);
+    // push / replace / pop with no saved state → top.
+    main.scrollLeft = 0;
+    main.scrollTop = 0;
 });
 ```
 
-## Why `beforeLeave`, not `beforeEnter`
+**Why `previous` is the fix.** `beforeLeave` fires after the commit, so
+`snapshot` is the **new** committed state and `router.getSnapshot()`
+returns the new one too. Before `previous` was added, the only way to
+know the old URL was a `lastSnapshot` closure — easy to get wrong, and
+a naive `router.getSnapshot().url` saved the old scroll under the new
+URL, corrupting back-navigation.
 
-`beforeLeave` fires **before** the commit — the router's current snapshot
-is still the previous one. That's the only moment you can read the old
-`window.scrollY` before the DOM is replaced.
+## Multiple containers
 
-`afterEnter` fires after commit — the new DOM is in place, so
-`window.scrollTo` works.
+The `scroll` key in `history.state` is just a namespace — the router does
+not interpret it. Extend the schema:
 
-If you skip `beforeLeave`, the `push` path still works (scroll to top),
-but `pop` will restore nothing — you have no saved position.
+```js
+const containers = {
+    main: document.querySelector('#main'),
+    sidebar: document.querySelector('#sidebar'),
+};
+
+router.on('beforeLeave', ({ previous }) => {
+    if (!previous) return;
+    const saved = {};
+    for (const [name, el] of Object.entries(containers)) {
+        saved[name] = { x: el.scrollLeft, y: el.scrollTop };
+    }
+    const ctx = router.adapter.historyState() ?? {};
+    router.adapter.replaceState({ ...ctx, scroll: saved });
+});
+
+router.on('afterEnter', ({ snapshot }) => {
+    if (snapshot.navigationType === 'revalidate') return;
+    const saved = snapshot.navigationType === 'pop' ? router.adapter.historyState()?.scroll : null;
+    for (const [name, el] of Object.entries(containers)) {
+        el.scrollLeft = saved?.[name]?.x ?? 0;
+        el.scrollTop = saved?.[name]?.y ?? 0;
+    }
+});
+```
+
+A virtualized list would store `{ index, offset }` instead of `scrollTop`
+and restore via `list.scrollToIndex({ index, offset })`. Same shape, app-
+specific.
 
 ## Async content
 
-The above assumes the content is already in the DOM when `afterEnter`
-fires. If your route renders a skeleton first and loads data
-asynchronously (see [`data-loading.md`](data-loading.md)), the scroll
-restoration must happen **after** the data renders, not after commit.
+`afterEnter` fires immediately after commit — the new DOM may not have
+rendered yet (skeleton, then data). Restoring before content mounts
+scrolls an empty container.
+
+Defer the restore:
 
 ```js
-let pendingScrollRestore = null;
+let pendingRestore = null;
 
 router.on('afterEnter', ({ snapshot }) => {
     if (snapshot.navigationType === 'revalidate') return;
 
     if (snapshot.navigationType === 'pop') {
-        const key = 'scroll:' + snapshot.url;
-        const saved = /** @type {any} */ (router.adapter.historyState())?.[key];
+        const saved = router.adapter.historyState()?.scroll;
         if (saved) {
-            pendingScrollRestore = saved;
+            pendingRestore = saved;
             return;
         }
     }
-    window.scrollTo(0, 0);
+    main.scrollTop = 0;
 });
 
-// After your view renders content (after await loadData, or after the
-// framework commits its render):
-function onViewRendered() {
-    if (pendingScrollRestore) {
-        window.scrollTo(pendingScrollRestore.x, pendingScrollRestore.y);
-        pendingScrollRestore = null;
-    }
+// Call after your view renders content. React: useLayoutEffect after
+// data settles. Vue: nextTick after render. Vanilla: after your render.
+function onContentMounted() {
+    if (!pendingRestore) return;
+    main.scrollLeft = pendingRestore.x ?? 0;
+    main.scrollTop = pendingRestore.y ?? 0;
+    pendingRestore = null;
 }
 ```
 
-The **recipe** stops here — the trigger (`onViewRendered`) is app-specific:
-React `useLayoutEffect`, Vue `onMounted` + `nextTick`, or a `requestAnimationFrame`
-after your render function.
+The timing of `onContentMounted` is app-specific — that is why this is a
+recipe, not a library.
 
 ## Anchors
 
-In-page anchors (`#section`) are not supported by the core — `attachLinks`
-intercepts only RRU links, and `href` in hash mode has no anchor syntax.
-Use `scrollIntoView` after `afterEnter`:
+In-page anchors (`#section`) are not part of the RRU. The core rejects
+`#` in an RRU (`invalid-rru`). Use `scrollIntoView` after render:
 
 ```js
 router.on('afterEnter', ({ snapshot }) => {
+    if (snapshot.navigationType === 'revalidate') return;
     const hash = location.hash;
     if (!hash) return;
     const el = document.querySelector(hash);
@@ -125,49 +151,40 @@ router.on('afterEnter', ({ snapshot }) => {
 });
 ```
 
-Do **not** pass `#section` to `router.navigate` — the URL is an RRU, and
-`#` in an RRU is a contract violation (`invalid-rru`).
+## Breadcrumbs — same `previous` / `snapshot` pair
 
-## Breadcrumbs
-
-`getChainPrefixes(snapshot)` returns the URL down to each node in
-`snapshot.chain` — perfect for breadcrumbs:
+`getChainPrefixes(snapshot)` and `getChainPrefixes(previous)` give the
+two chains for a transition. Same primitives, no router changes:
 
 ```js
-const prefixes = getChainPrefixes(snapshot);
-const crumbs = snapshot.chain.map((node, i) => ({
-    label: isFile(node) ? node.title ?? node.name : '…',
-    href: prefixes[i],
-}));
+router.on('afterEnter', ({ snapshot, previous }) => {
+    if (!previous) return;
+    const from = getChainPrefixes(previous);
+    const to = getChainPrefixes(snapshot);
+    // ...use for breadcrumbs, analytics, transition direction
+});
 ```
-
-No scroll involved — but the same `chain` powers both. If you're
-implementing scroll restoration, you already have breadcrumbs for free.
 
 ## Don't
 
--   **Don't** add a `scroll` subpath — the roadmap treats this as an app
-    responsibility. The two primitives (`historyState` / `replaceState`)
-    exist for exactly this.
--   **Don't** restore on `revalidate()` — the URL didn't change.
--   **Don't** compare `navigationType` against `'pop'` to detect
-    back/forward — a guard redirect during popstate commits as `'replace'`.
-    For scroll purposes, treat redirects as `push` (scroll to top) — which
-    the policy above does.
--   **Don't** store scroll in `sessionStorage` — `history.state` is per-entry,
-    survives back/forward naturally, and is cleared when the history entry
-    is replaced.
--   **Don't** run `scrollTo` before the DOM is updated — `afterEnter` fires
-    after commit, but async content may not be in the DOM yet. Defer until
-    the view renders.
+-   **Don't** save under `snapshot.url` in `beforeLeave` — that is the
+    **new** URL. Use `previous.url`.
+-   **Don't** save in `afterLeave` — the old DOM may already be replaced.
+    `beforeLeave` is the only reliable read point.
+-   **Don't** restore in `beforeEnter` — the new DOM is not mounted yet.
+-   **Don't** use `sessionStorage` — `history.state` is per-history-entry
+    and browser-managed. It survives back/forward and is replaced on push.
+-   **Don't** rely on `navigationType === 'pop'` to detect back/forward — a
+    guard redirect during popstate commits as `'replace'`. For scroll, treat
+    that as push (scroll to top) — which the pattern above does.
+-   **Don't** expect a universal `attachScrollRestoration` in the router.
+    Containers, axes, timing are app concerns.
 
 ## See also
 
--   [`data-loading.md`](data-loading.md) — the async content pattern that
-    makes scroll restoration tricky.
--   [`concepts/snapshots.md`](../concepts/snapshots.md) — `navigationType`
-    and `chain`.
+-   [`concepts/snapshots.md`](../concepts/snapshots.md) — `previous` in
+    `beforeLeave` / `afterLeave`, `navigationType`.
 -   [`api/adapters.md`](../api/adapters.md) — `historyState` /
     `replaceState` contract.
--   [`api/README.md`](../api/README.md) — `getChainPrefixes` and
-    `chainParams`.
+-   [`api/README.md`](../api/README.md) — `getChainPrefixes` for
+    breadcrumbs on the same `previous` / `snapshot` pair.

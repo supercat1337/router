@@ -5,7 +5,7 @@ import { file } from '../src/data-model.js';
 import { createMap } from '../src/map.js';
 import { createRouter } from '../src/router.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
-import { createEventBus } from "../src/events.js";
+import { createEventBus } from '../src/events.js';
 
 /** @type {import("../src/types.js").NotFoundHandler} */
 const nf = () => null;
@@ -183,7 +183,7 @@ test('events fire in registration order', t => {
     t.deepEqual(order, [1, 2, 3]);
 });
 
-test("listener throw without onListenerError → console.error fallback", (t) => {
+test('listener throw without onListenerError → console.error fallback', t => {
     const originalError = console.error;
     /** @type {unknown[][]} */
     const calls = [];
@@ -195,10 +195,10 @@ test("listener throw without onListenerError → console.error fallback", (t) =>
     });
 
     const bus = createEventBus(undefined);
-    bus.on("afterEnter", () => {
-        throw new Error("boom");
+    bus.on('afterEnter', () => {
+        throw new Error('boom');
     });
-    bus.emit("afterEnter", {
+    bus.emit('afterEnter', {
         suffix: [],
         snapshot: /** @type {any} */ ({ navigationId: 1 }),
     });
@@ -207,13 +207,11 @@ test("listener throw without onListenerError → console.error fallback", (t) =>
     // `console.error` can fire more than once. The router's contract is
     // "listener errors reach console.error when no onListenerError is
     // configured", not "exactly once".
-    t.true(calls.length >= 1, "console.error must be called");
+    t.true(calls.length >= 1, 'console.error must be called');
     const sawBoom = calls.some(
-        (args) =>
-            args[0] instanceof Error &&
-            /** @type {Error} */ (args[0]).message === "boom",
+        args => args[0] instanceof Error && /** @type {Error} */ (args[0]).message === 'boom'
     );
-    t.true(sawBoom, "console.error must receive the original error");
+    t.true(sawBoom, 'console.error must receive the original error');
 });
 
 test('listener throw without onListenerError → chain continues', t => {
@@ -237,4 +235,55 @@ test('listener throw without onListenerError → chain continues', t => {
     });
 
     t.is(ok, 1);
+});
+
+test('beforeLeave: previous is the last committed snapshot', t => {
+    const router = setup();
+    /** @type {import('../src/types.js').Snapshot | null} */
+    let captured = null;
+    router.on('beforeLeave', ({ previous }) => {
+        captured = previous;
+    });
+    const before = router.getSnapshot();
+    router.navigate('/profile');
+    t.is(captured, before);
+});
+
+test('beforeLeave: previous.url = source, snapshot.url = target', t => {
+    const router = setup();
+    /** @type {string | null} */
+    let prevUrl = null;
+    /** @type {string | null} */
+    let snapUrl = null;
+    router.on('beforeLeave', ({ previous, snapshot }) => {
+        prevUrl = previous?.url ?? null;
+        snapUrl = snapshot.url;
+    });
+    router.navigate('/profile');
+    t.is(prevUrl, '/login');
+    t.is(snapUrl, '/profile');
+});
+
+test('beforeLeave: previous equals router.getSnapshot() before navigate', t => {
+    const router = setup();
+    let prev;
+    router.on('beforeLeave', ({ previous }) => {
+        prev = previous;
+    });
+    const before = router.getSnapshot();
+    router.navigate('/profile');
+    t.is(prev, before);
+    t.not(prev, router.getSnapshot());
+});
+
+test('afterLeave: previous is the last committed snapshot', t => {
+    const router = setup();
+    /** @type {import('../src/types.js').Snapshot | null} */
+    let captured = null;
+    router.on('afterLeave', ({ previous }) => {
+        captured = previous;
+    });
+    const before = router.getSnapshot();
+    router.navigate('/profile');
+    t.is(captured, before);
 });

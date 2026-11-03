@@ -569,11 +569,30 @@ export interface Snapshot {
  * @public
  */
 export interface EventPayloads {
-    /** Fires once per transaction, before `afterLeave`. Suffix = divergent tail. */
-    beforeLeave: { suffix: Node[]; snapshot: Snapshot };
+    /**
+     * Fires once per transaction, before `afterLeave`. Suffix = divergent
+     * tail.
+     *
+     * `previous` is the last committed snapshot **before** this transaction
+     * — the one whose chain the listener is about to leave. Use it to save
+     * per-URL state (scroll, analytics source, transition direction) under
+     * `previous.url`.
+     *
+     * The commit happens **before** this event fires, so `snapshot` is the
+     * new committed one, and `router.getSnapshot()` inside the listener
+     * returns the new snapshot too. `previous` is the only way to know the
+     * old URL here.
+     *
+     * `null` when there is no previous commit. In practice unreachable for
+     * `beforeLeave` — the event only fires when `leaveSuffix.length > 0`,
+     * which requires a previous chain — but the type is nullable for
+     * consistency with a future addition to `beforeEnter` / `afterEnter`
+     * (there `previous` would be `null` for the initial commit).
+     */
+    beforeLeave: { suffix: Node[]; snapshot: Snapshot; previous: Snapshot | null };
 
-    /** Fires once per transaction, after `beforeLeave`. */
-    afterLeave: { suffix: Node[]; snapshot: Snapshot };
+    /** Fires once per transaction, after `beforeLeave`. Same payload. */
+    afterLeave: { suffix: Node[]; snapshot: Snapshot; previous: Snapshot | null };
 
     /** Fires once per transaction, before `afterEnter`. */
     beforeEnter: { suffix: Node[]; snapshot: Snapshot };

@@ -12,9 +12,9 @@ import { attachActiveLinks } from '@supercat1337/router/active-links';
 const detach = attachActiveLinks(router);
 ```
 
-- Matching is strict — `/profile?tab=1` is not active at `/profile`.
-- Only the exact link is marked.
-- Right when each page has exactly one link.
+-   Matching is strict — `/profile?tab=1` is not active at `/profile`.
+-   Only the exact link is marked.
+-   Right when each page has exactly one link.
 
 ## Prefix matching: `getChainPrefixes`
 
@@ -41,9 +41,9 @@ router.subscribe(snapshot => {
 
 `prefixes` is the URL down to each `snapshot.chain` node — root-most first. Every ancestor of the current route is in the array, so `includes(rru)` matches shallower links.
 
-- **Deep URLs** — `/admin/users/5/edit` includes `/admin` and `/admin/users`. Both are marked.
-- **Sibling links** — `/admin/reports` is not in `/admin/users/5/edit`'s prefixes. Correctly not marked.
-- **Encoded names** — `:name` values encoded the same way as `snapshot.url`, so `startsWith` works even for IDs containing `/`, `?`, `#`.
+-   **Deep URLs** — `/admin/users/5/edit` includes `/admin` and `/admin/users`. Both are marked.
+-   **Sibling links** — `/admin/reports` is not in `/admin/users/5/edit`'s prefixes. Correctly not marked.
+-   **Encoded names** — `:name` values encoded the same way as `snapshot.url`, so `startsWith` works even for IDs containing `/`, `?`, `#`.
 
 ## Custom matching
 
@@ -81,8 +81,14 @@ function NavLink({ router, to, children, ...rest }) {
 }
 ```
 
+**This is the recommended way to do prefix matching.** The router does not
+ship `attachActiveLinks({ match: 'prefix' })` — a string-prefix would
+false-positive (`/admin` active on `/admin-tools`), and a chain-based
+prefix is the 15 lines above. If you use `router-react`, `<NavLink end={false}>`
+does exactly this.
+
 ## See also
 
-- [`attachActiveLinks`](../api/active-links.md) — strict-equality ARIA marking.
-- [`getChainPrefixes` in AGENTS.md](../../AGENTS.md) — Do / Don't for prefix matching.
-- [React integration](react.md) / [Vue integration](vue.md) — full framework glue.
+-   [`attachActiveLinks`](../api/active-links.md) — strict-equality ARIA marking.
+-   [`getChainPrefixes` in AGENTS.md](../../AGENTS.md) — Do / Don't for prefix matching.
+-   [React integration](react.md) / [Vue integration](vue.md) — full framework glue.

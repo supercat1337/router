@@ -42,7 +42,7 @@ See [WAI-ARIA `aria-current`](https://www.w3.org/TR/wai-aria-1.2/#aria-current) 
 
 ## Limitations (v1)
 
-- **Strict equality only.** For "active on subpaths" (`/users/5` activates `/users`), wait for the `isActive` option in v2 — or write your own `router.subscribe` + DOM walk.
+- **Strict equality only.** For "active on subpaths" (`/users/5` activates `/users`), use `getChainPrefixes(snapshot).includes(rru)` — see [`docs/recipes/active-links.md`](../recipes/active-links.md). No `isActive` / `match` option is planned: the chain-based prefix is 15 lines of app code, and a string prefix would produce false positives (`/admin` active on `/admin-tools`).
 - **No `MutationObserver`.** DOM rescanned per-commit only. If you need immediate marking after a view render, call `detach()` + `attachActiveLinks(...)` after the render, or use `requestAnimationFrame` after `afterEnter`.
 
 ## Don't

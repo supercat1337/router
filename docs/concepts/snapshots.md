@@ -2,11 +2,11 @@
 
 The `Snapshot` is the router's committed state after a transaction. It is the single source of truth for "what is the current route". This page covers:
 
-- **Pull vs push** — `getSnapshot` vs `subscribe`.
-- **Immutability** — what's frozen, what's not.
-- **`redirectedFrom`** — original URL when the commit went through a `redirect()` chain.
-- **`navigationId`** — transaction id, not history position.
-- **`navigationType`** — transaction source, not history direction.
+-   **Pull vs push** — `getSnapshot` vs `subscribe`.
+-   **Immutability** — what's frozen, what's not.
+-   **`redirectedFrom`** — original URL when the commit went through a `redirect()` chain.
+-   **`navigationId`** — transaction id, not history position.
+-   **`navigationType`** — transaction source, not history direction.
 
 ## Pull and push
 
@@ -20,7 +20,7 @@ router.subscribe(snap => { ... });  // push — fires on every commit
 Plus event-specific hooks:
 
 ```js
-router.on("beforeLeave", ({ suffix, snapshot }) => { ... });
+router.on("beforeLeave", ({ suffix, snapshot, previous }) => { ... });
 router.on("afterEnter",  ({ suffix, snapshot }) => { ... });
 router.on("mapChanged",  ({ oldMap, newMap, snapshot }) => { ... });
 router.on("navigationError", ({ type, error, snapshot }) => { ... });
@@ -33,10 +33,47 @@ Listeners are notified; return value is ignored. A `throw` inside a listener is 
 
 The "stitch together `afterEnter` / `afterLeave` / `mapChanged` / `navigationError`" pattern is subtly wrong:
 
-- `revalidate()` with an unchanged URL commits a new snapshot but emits **no** `beforeEnter` / `afterEnter` (empty suffix);
-- prod error snapshots emit only `navigationError`.
+-   `revalidate()` with an unchanged URL commits a new snapshot but emits **no** `beforeEnter` / `afterEnter` (empty suffix);
+-   prod error snapshots emit only `navigationError`.
 
 A framework adapter that listens to the four enter/leave/map events will miss both. `subscribe` fires **exactly once per commit** — it is the only correct hook for `useSyncExternalStore` / Vue `shallowRef`.
+
+## `previous` in `beforeLeave` / `afterLeave`
+
+Both events carry `previous: Snapshot | null` — the last committed
+snapshot **before** this transaction. Use it to save per-URL state under
+the URL you are leaving.
+
+```js
+router.on('beforeLeave', ({ previous, snapshot }) => {
+    if (!previous) return; // no previous — nothing to save (unreachable today)
+
+    // previous.url = where you came from — save under this
+    // snapshot.url = where you are going
+    saveState(previous.url);
+});
+```
+
+This is the **only** way to know the previous URL inside these events:
+
+| In the listener            | Returns                                                       |
+| :------------------------- | :------------------------------------------------------------ |
+| `snapshot.url`             | **new** committed URL                                         |
+| `router.getSnapshot().url` | **new** committed URL — the commit happens before events fire |
+| `previous.url`             | **old** URL — the one you are leaving                         |
+
+The commit-before-events ordering is deliberate (see
+[Transactions are synchronous](transactions.md)); `previous` is the
+escape hatch for the save side.
+
+`beforeEnter` / `afterEnter` do **not** include `previous` (yet) — they
+are about the new snapshot. All save-side logic belongs in `beforeLeave`.
+
+`previous` is `null` when there is no previous commit. In practice
+`beforeLeave` never fires for the initial commit (the event requires a
+non-empty leave suffix, which requires a previous chain), but the type is
+nullable for consistency with a future `previous` addition to
+`beforeEnter` — there it would genuinely be `null` on initial.
 
 ## Snapshot and Router are frozen
 
@@ -44,17 +81,17 @@ Every `Snapshot` is deeply frozen at runtime — `chain`, `params`, `partialPara
 
 Official extension points (all present before freeze):
 
-- `attachLinks(router, { navigate, replace })` — override click handling;
-- `guard.navigate()` — guard-aware navigate/replace;
-- `router.subscribe(fn)` — observe every commit;
-- `router.on(event, fn)` — observe specific events.
+-   `attachLinks(router, { navigate, replace })` — override click handling;
+-   `guard.navigate()` — guard-aware navigate/replace;
+-   `router.subscribe(fn)` — observe every commit;
+-   `router.on(event, fn)` — observe specific events.
 
 `adapter` is **not** frozen: test doubles mutate themselves, and freezing `adapter` would break test setups that patch `adapter.write`.
 
 Two snapshot fields are app-owned and **not** frozen:
 
-- `notFoundResult` — whatever your `notFound` handler returned;
-- `error.error` — the original exception from `resolver-throw` / `notFound-throw`.
+-   `notFoundResult` — whatever your `notFound` handler returned;
+-   `error.error` — the original exception from `resolver-throw` / `notFound-throw`.
 
 `snapshot.leaf` is a convenience — it's `chain[chain.length - 1]` or `undefined` for an empty chain (`notFound` / `error` at the root).
 
@@ -74,8 +111,8 @@ router.navigate('/old').redirectedFrom; // '/old'
 router.navigate('/login').redirectedFrom; // undefined
 ```
 
-- **Multi-hop:** `/a → /b → /c` → `redirectedFrom = '/a'` (the original), `url = '/c'` (the final).
-- **Not for guard redirects** — those commit a **new** transaction via `router.replace()`, so `redirectedFrom` is `undefined` even though the URL changed.
+-   **Multi-hop:** `/a → /b → /c` → `redirectedFrom = '/a'` (the original), `url = '/c'` (the final).
+-   **Not for guard redirects** — those commit a **new** transaction via `router.replace()`, so `redirectedFrom` is `undefined` even though the URL changed.
 
     ```js
     await nav.navigate('/a'); // guard returns redirect('/b')
@@ -85,8 +122,8 @@ router.navigate('/login').redirectedFrom; // undefined
 
     `redirectedFrom` describes a redirect **within** a single transaction (a `notFound` handler returning `redirect()`). Guard redirects live **outside** the transaction — the guard layer calls `router.replace(target)`, which starts a fresh transaction with its own `navigationId` and no `redirectedFrom`.
 
-- **Absent on error snapshots** — for `redirect-loop`, use `snapshot.error.path` (the chain of normalized URLs that looped).
-- **Absent on direct notFound** — nothing redirected; the URL just did not match.
+-   **Absent on error snapshots** — for `redirect-loop`, use `snapshot.error.path` (the chain of normalized URLs that looped).
+-   **Absent on direct notFound** — nothing redirected; the URL just did not match.
 
 Use it for analytics ("user tried `/old`, we redirected to `/login`"), debugging redirect rules, or replacing a history entry with the original URL on `popstate`.
 
@@ -107,12 +144,12 @@ chainParams(snap);
 // { id: '5' }
 ```
 
-- **Prefix matching** — `getChainPrefixes` is the basis for `<NavLink>`-style active marking. A link whose RRU appears in this array is active — even if the current URL goes deeper.
-- **Breadcrumbs** — pair each prefix with its node (`snapshot.chain[i]`) to render `<a href={prefixes[i]}>` for each level.
-- **Params for custom rendering** — `chainParams(snapshot)` is the one function that works for `matched`, `notFound`, and (consistently) `error` snapshots. Use it instead of `snapshot.params` / `snapshot.partialParams` if you don't branch on status.
-- **Search excluded** — prefixes are pathname-only.
-- **Canonical encoding** — `:name` segments encoded via `encodeURIComponent`, matching `map.url()` / `router.url()`. If your links are built via those helpers, `deeperUrl.startsWith(prefix)` works even for IDs containing `/`, `?`, `#`.
-- **Error snapshots** — return the prefixes of the previous committed state, consistent with `snapshot.chain`.
+-   **Prefix matching** — `getChainPrefixes` is the basis for `<NavLink>`-style active marking. A link whose RRU appears in this array is active — even if the current URL goes deeper.
+-   **Breadcrumbs** — pair each prefix with its node (`snapshot.chain[i]`) to render `<a href={prefixes[i]}>` for each level.
+-   **Params for custom rendering** — `chainParams(snapshot)` is the one function that works for `matched`, `notFound`, and (consistently) `error` snapshots. Use it instead of `snapshot.params` / `snapshot.partialParams` if you don't branch on status.
+-   **Search excluded** — prefixes are pathname-only.
+-   **Canonical encoding** — `:name` segments encoded via `encodeURIComponent`, matching `map.url()` / `router.url()`. If your links are built via those helpers, `deeperUrl.startsWith(prefix)` works even for IDs containing `/`, `?`, `#`.
+-   **Error snapshots** — return the prefixes of the previous committed state, consistent with `snapshot.chain`.
 
 For strict RRU equality (single-link active state), use `snapshot.url` directly — see [`attachActiveLinks`](../api/active-links.md) and [`docs/recipes/active-links.md`](../recipes/active-links.md).
 
@@ -134,9 +171,9 @@ router.on('afterEnter', ({ snapshot }) => {
 
 **Not usable as:**
 
-- a history position;
-- a back/forward indicator;
-- a "remount key" — compare `url` / `params` for that.
+-   a history position;
+-   a back/forward indicator;
+-   a "remount key" — compare `url` / `params` for that.
 
 ## `navigationType` — transaction source, not history direction
 
@@ -177,9 +214,9 @@ On error snapshots, `navigationType` reflects the **attempted** transaction, not
 
 On `status === 'error'`, these fields are inherited from the **previous committed snapshot**, consistent with each other:
 
-- `chain`, `map`, `leaf` — the last successful route;
-- `params`, `partialParams` — the params in scope on the last successful route;
-- `search` — the decoded query of the last successful URL.
+-   `chain`, `map`, `leaf` — the last successful route;
+-   `params`, `partialParams` — the params in scope on the last successful route;
+-   `search` — the decoded query of the last successful URL.
 
 The attempted URL's search is available only as part of `snapshot.error.attemptedUrl` (raw string), unparsed. If you need it parsed, do it yourself — the router deliberately does not mix diagnostic data (the failed attempt) with committed state (the last good snapshot).
 
@@ -189,6 +226,6 @@ Direction (back vs forward) is deliberately **not** part of `Snapshot`: it would
 
 ## See also
 
-- [Transactions are synchronous](transactions.md) — how a snapshot is produced.
-- [`Router.subscribe` in AGENTS.md](../../AGENTS.md) — the framework-integration hook.
-- [`docs/recipes/data-loading.md`](../recipes/data-loading.md) — the `isCurrent` pattern in practice.
+-   [Transactions are synchronous](transactions.md) — how a snapshot is produced.
+-   [`Router.subscribe` in AGENTS.md](../../AGENTS.md) — the framework-integration hook.
+-   [`docs/recipes/data-loading.md`](../recipes/data-loading.md) — the `isCurrent` pattern in practice.

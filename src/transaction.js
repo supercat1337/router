@@ -74,10 +74,10 @@ export function runTransaction(source, inputUrl, env) {
         source === 'navigate'
             ? 'push'
             : source === 'replace'
-              ? 'replace'
-              : source === 'popstate'
-                ? 'pop'
-                : source; // 'revalidate' | 'initial'
+            ? 'replace'
+            : source === 'popstate'
+            ? 'pop'
+            : source; // 'revalidate' | 'initial'
 
     // Validate input RRU. `popstate` reads through adapter which guarantees
     // validity per adapter contract; other sources pass through the public
@@ -100,7 +100,9 @@ export function runTransaction(source, inputUrl, env) {
     // No-op for navigate/replace (skip when the current snapshot is error).
     if (isNoopEligible && prevSnapshot && prevSnapshot.status !== 'error') {
         const current = normalizeRRU(env.adapter.read());
-        if (url === current) {return prevSnapshot;}
+        if (url === current) {
+            return prevSnapshot;
+        }
     }
 
     /** @type {string[]} */
@@ -332,8 +334,8 @@ export function runTransaction(source, inputUrl, env) {
         });
     }
     if (leaveSuffix.length > 0) {
-        env.emit('beforeLeave', { suffix: leaveSuffix, snapshot });
-        env.emit('afterLeave', { suffix: leaveSuffix, snapshot });
+        env.emit('beforeLeave', { suffix: leaveSuffix, snapshot, previous: prevSnapshot });
+        env.emit('afterLeave', { suffix: leaveSuffix, snapshot, previous: prevSnapshot });
     }
     if (mapChanged) {
         env.emit('mapChanged', {
@@ -372,11 +374,15 @@ function getKeysMap(map) {
  */
 function handleError(type, extra, prevSnapshot, isInitial, navigationType, env) {
     if (isInitial) {
-        if (extra.error !== undefined) {throw extra.error;}
+        if (extra.error !== undefined) {
+            throw extra.error;
+        }
         throw new TypeError(`initial transaction failed: ${type}`);
     }
     if (env.dev) {
-        if (extra.error !== undefined) {throw extra.error;}
+        if (extra.error !== undefined) {
+            throw extra.error;
+        }
         throw new TypeError(type);
     }
     /* c8 ignore next 4 */

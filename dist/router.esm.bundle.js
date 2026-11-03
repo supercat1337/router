@@ -1541,8 +1541,8 @@ function runTransaction(source, inputUrl, env) {
     });
   }
   if (leaveSuffix.length > 0) {
-    env.emit("beforeLeave", { suffix: leaveSuffix, snapshot });
-    env.emit("afterLeave", { suffix: leaveSuffix, snapshot });
+    env.emit("beforeLeave", { suffix: leaveSuffix, snapshot, previous: prevSnapshot });
+    env.emit("afterLeave", { suffix: leaveSuffix, snapshot, previous: prevSnapshot });
   }
   if (mapChanged) {
     env.emit("mapChanged", {
