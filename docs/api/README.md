@@ -8,6 +8,8 @@
 - [links](links.md) — `attachLinks`, `attachPreload`
 - [guard](guard.md) — `createGuardLayer`, `createGuardedRouter`
 - [active-links](active-links.md) — `attachActiveLinks`
+- [testing](testing.md) — `createTestRouter`, `createMemoryAdapter`
+- [ssr](ssr.md) — `createServerAdapter`, `serializeState`, `readInitialState`, `assertHydration`
 
 ## Core entry (`@supercat1337/router`)
 
