@@ -22,13 +22,21 @@ The mental model — read in order the first time.
 Task-oriented. Skip around.
 
 - [Protected route](recipes/protected-route.md)
+- [Auth maps](recipes/auth-maps.md)
 - [Nested layout](recipes/nested-layout.md)
 - [Data loading with loading / error UI](recipes/data-loading.md)
+- [Data loading with TanStack Query](recipes/afterEnter-tanstack-query.md)
 - [Code splitting](recipes/code-splitting.md)
+- [Scroll restoration](recipes/scroll-restoration.md)
 - [Preload before navigate](recipes/preload-before-navigate.md)
+- [Guards + optimistic UI](recipes/guards-optimistic-ui.md)
 - [Custom 404 render](recipes/custom-404.md)
+- [Active links](recipes/active-links.md)
+- [Search params patterns](recipes/search-params-patterns.md)
 - [Validating route names from data](recipes/validating-route-names.md)
 - [Devtools](recipes/devtools.md)
+- [How to write a custom adapter](recipes/how-to-write-custom-adapter.md)
+- [Testing routes](recipes/testing-routes.md)
 - [React integration](recipes/react.md)
 - [Vue integration](recipes/vue.md)
 

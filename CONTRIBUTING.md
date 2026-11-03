@@ -39,31 +39,50 @@ depend on GitHub Actions. Everything runs locally.
 
 ## What's welcome
 
-- **Bug reports** with a reproducer. A failing test is even better.
-- **Documentation fixes** — typos, unclear wording, missing examples.
-- **Tests** for existing behavior that isn't covered.
-- **Type-level improvements** that don't change runtime.
-- **Bug fixes** with a regression test.
+-   **Bug reports** with a reproducer. A failing test is even better.
+-   **Documentation fixes** — typos, unclear wording, missing examples.
+-   **Tests** for existing behavior that isn't covered.
+-   **Type-level improvements** that don't change runtime.
+-   **Bug fixes** with a regression test.
+
+## What to include in a bug report
+
+No template — just include this in the issue body. Works on any host
+(GitHub, GitVerse, GitLab, SourceHut):
+
+-   **Version:** `@supercat1337/router@x.y.z` — from `package.json` or
+    `npm ls @supercat1337/router`.
+-   **Environment:** Node version, OS, browser (if DOM-related).
+-   **Minimal reproduction:** the smallest `createMap` + `createRouter`
+    setup that triggers the bug. If you can, a failing test case — see
+    `tests/*.test.js` for patterns.
+-   **Expected vs. actual:** what you expected to happen, what happened.
+-   **Stack trace:** if an exception, the full trace, not the last line.
+-   **`dist/` or source?** — did you import from the published package or
+    from `src/`? The `dist/` artifact is generated; `src/` is the truth.
+
+A failing test is the ideal reproducer — it will be added to
+`tests/` as-is and used to prove the fix.
 
 ## What needs discussion first
 
 Open an issue **before** writing code for:
 
-- **New public API.** The surface is intentionally small. Additions have
-  to earn their place.
-- **Performance optimizations.** Bench first (`npm run bench`), then show
-  the delta. Use the existing 12-scenario harness — don't invent new ones.
-- **New subpath exports.** These expand the maintenance surface.
-- **New runtime dependencies.** One (`@supercat1337/event-emitter`) is the
-  design; dev deps are negotiable.
+-   **New public API.** The surface is intentionally small. Additions have
+    to earn their place.
+-   **Performance optimizations.** Bench first (`npm run bench`), then show
+    the delta. Use the existing 12-scenario harness — don't invent new ones.
+-   **New subpath exports.** These expand the maintenance surface.
+-   **New runtime dependencies.** One (`@supercat1337/event-emitter`) is the
+    design; dev deps are negotiable.
 
 ## What gets closed
 
-- **"Add framework X support"** — core is framework-agnostic by design.
-  Ecosystem packages (when they exist) live in separate repos.
-- **PRs that add CI** — see "Setup" above.
-- **PRs without tests** — every behavior needs a test.
-- **PRs that touch the public API without a spec or issue.**
+-   **"Add framework X support"** — core is framework-agnostic by design.
+    Ecosystem packages (when they exist) live in separate repos.
+-   **PRs that add CI** — see "Setup" above.
+-   **PRs without tests** — every behavior needs a test.
+-   **PRs that touch the public API without a spec or issue.**
 
 ## Workflow
 
@@ -87,16 +106,16 @@ table in `README.md`. Commit both together.
 
 ## Testing conventions
 
-- **AVA**, files in `tests/**/*.test.js`.
-- **`test.serial` is required** for any test that touches `globalThis`:
-  `installDom()`, `document`, `history`, `location`,
-  `__SUPERCAT_ROUTER_DEVTOOLS__`. AVA runs tests concurrently within a
-  file; a `dom.teardown()` from one test can delete `document` while
-  another is still running. This is the #1 source of flaky tests in this
-  repo.
-- **No `test.serial`** for pure logic (matching, data-model, snapshot).
-  Concurrent execution is faster and they don't mutate globals.
-- **One behavior per test.** Prefer many small tests over a few large ones.
+-   **AVA**, files in `tests/**/*.test.js`.
+-   **`test.serial` is required** for any test that touches `globalThis`:
+    `installDom()`, `document`, `history`, `location`,
+    `__SUPERCAT_ROUTER_DEVTOOLS__`. AVA runs tests concurrently within a
+    file; a `dom.teardown()` from one test can delete `document` while
+    another is still running. This is the #1 source of flaky tests in this
+    repo.
+-   **No `test.serial`** for pure logic (matching, data-model, snapshot).
+    Concurrent execution is faster and they don't mutate globals.
+-   **One behavior per test.** Prefer many small tests over a few large ones.
 
 ## Pre-publish gate
 
@@ -137,10 +156,9 @@ a new feature that happens to be incompatible.
 
 ## Communication
 
-- **Issues** — bugs, proposals, questions. No SLA; I respond when I can.
-- **PRs** — small, focused, with a test. Large refactors get closed.
-- **Discussions** — enabled. Use it for "how do I…", show-and-tell, and
-  open-ended ideas. Issues stay for concrete bugs and proposals.
+-   **Issues** — bugs, proposals, questions. No SLA; I respond when I can.
+-   **PRs** — small, focused, with a test. Large refactors get closed.
+-   **Discussions** — not enabled yet. Ask in an issue.
 
 ## License
 
