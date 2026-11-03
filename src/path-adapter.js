@@ -40,14 +40,14 @@ function validateBase(base) {
  * @returns {string}
  */
 function resolveBase(explicitBase) {
-    if (explicitBase !== undefined) return validateBase(explicitBase);
+    if (explicitBase !== undefined) {return validateBase(explicitBase);}
 
     if (typeof document !== 'undefined') {
         const baseEl = /** @type {HTMLBaseElement | null} */ (document.querySelector('base[href]'));
         const href = baseEl ? baseEl.href : undefined;
         if (href) {
             const path = new URL(href).pathname;
-            if (path.endsWith('/')) return validateBase(path);
+            if (path.endsWith('/')) {return validateBase(path);}
             throw new TypeError(
                 "createPathAdapter: <base href> must end with '/' (base = " +
                     JSON.stringify(path) +
@@ -92,35 +92,35 @@ export function createPathAdapter({ base } = {}) {
             // 08#ssr and 08#invariants п. 11 require the SSR fallback.
             // The reference code in 08#path-mode omits this check —
             // reconciled in favour of the invariants.
-            if (typeof location === 'undefined') return '/';
+            if (typeof location === 'undefined') {return '/';}
             const path = location.pathname;
-            if (!path.startsWith(resolvedBase)) return '/';
+            if (!path.startsWith(resolvedBase)) {return '/';}
             const rru = '/' + path.slice(resolvedBase.length) + location.search;
             return rru.includes('#') ? '/' : rru;
         },
 
         write(url, mode) {
-            if (typeof history === 'undefined') return;
+            if (typeof history === 'undefined') {return;}
             const full = resolvedBase + url.slice(1);
-            if (mode === 'push') history.pushState(null, '', full);
-            else history.replaceState(null, '', full);
+            if (mode === 'push') {history.pushState(null, '', full);}
+            else {history.replaceState(null, '', full);}
         },
 
         listen(cb) {
-            if (typeof addEventListener === 'undefined') return () => {};
+            if (typeof addEventListener === 'undefined') {return () => {};}
             addEventListener('popstate', cb);
             return () => removeEventListener('popstate', cb);
         },
 
         normalize(href) {
             const abs = new URL(href, location.href);
-            if (abs.origin !== location.origin) return null;
+            if (abs.origin !== location.origin) {return null;}
             if (abs.protocol !== 'http:' && abs.protocol !== 'https:') {
                 return null;
             }
-            if (!abs.pathname.startsWith(resolvedBase)) return null;
+            if (!abs.pathname.startsWith(resolvedBase)) {return null;}
             const sameDoc = abs.pathname === location.pathname && abs.search === location.search;
-            if (sameDoc && abs.hash !== '') return null;
+            if (sameDoc && abs.hash !== '') {return null;}
             const rest = abs.pathname.slice(resolvedBase.length);
             return '/' + rest + abs.search;
         },
@@ -135,12 +135,12 @@ export function createPathAdapter({ base } = {}) {
         },
 
         historyState() {
-            if (typeof history === 'undefined') return null;
+            if (typeof history === 'undefined') {return null;}
             return history.state;
         },
 
         replaceState(state) {
-            if (typeof history === 'undefined' || typeof location === 'undefined') return;
+            if (typeof history === 'undefined' || typeof location === 'undefined') {return;}
             history.replaceState(state, '', location.href);
         },
     };

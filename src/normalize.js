@@ -36,9 +36,9 @@ export function normalizeRRU(url) {
  * @returns {boolean}
  */
 export function isValidRRU(url) {
-    if (typeof url !== 'string') return false;
-    if (url.length === 0) return false;
-    if (!url.startsWith('/')) return false;
-    if (url.includes('#')) return false;
+    if (typeof url !== 'string') {return false;}
+    if (url.length === 0) {return false;}
+    if (!url.startsWith('/')) {return false;}
+    if (url.includes('#')) {return false;}
     return true;
 }

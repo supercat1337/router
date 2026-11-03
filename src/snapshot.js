@@ -119,7 +119,7 @@ export function commonChainPrefix(prev, next, getKeysMap) {
     const nextPrefixes = urlPrefixes(next.chain, next, getKeysMap(next.map));
     const n = Math.min(prevPrefixes.length, nextPrefixes.length);
     for (let i = 0; i < n; i++) {
-        if (prevPrefixes[i] !== nextPrefixes[i]) return i;
+        if (prevPrefixes[i] !== nextPrefixes[i]) {return i;}
     }
     return n;
 }
@@ -169,8 +169,8 @@ export function buildSnapshot(
         url,
         leaf: frozenChain.length > 0 ? frozenChain[frozenChain.length - 1] : undefined,
     };
-    if (status === 'notFound') snap.notFoundResult = notFoundResult;
-    if (redirectedFrom !== undefined) snap.redirectedFrom = redirectedFrom;
+    if (status === 'notFound') {snap.notFoundResult = notFoundResult;}
+    if (redirectedFrom !== undefined) {snap.redirectedFrom = redirectedFrom;}
     return /** @type {Snapshot} */ (Object.freeze(snap));
 }
 

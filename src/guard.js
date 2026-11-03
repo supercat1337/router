@@ -101,7 +101,9 @@ export function createGuardLayer(options) {
      * @returns {boolean}
      */
     function isCancelError(e) {
-        if (!(e instanceof Error)) return false;
+        if (!(e instanceof Error)) {
+            return false;
+        }
         return e.name === 'CancelError' || (e.constructor && e.constructor.name === 'CancelError');
     }
 
@@ -113,7 +115,9 @@ export function createGuardLayer(options) {
      * @returns {string | null}
      */
     function getRedirectTarget(decision) {
-        if (isRedirect(decision)) return decision.url;
+        if (isRedirect(decision)) {
+            return decision.url;
+        }
         if (typeof decision === 'object' && decision !== null && 'redirect' in decision) {
             return decision.redirect;
         }
@@ -133,7 +137,9 @@ export function createGuardLayer(options) {
     async function runGuards(url, signal, from) {
         const facade = makeFacade();
         for (const guard of guards) {
-            if (signal.aborted) return { block: true };
+            if (signal.aborted) {
+                return { block: true };
+            }
             /** @type {Decision} */
             let decision;
             syncInGuard = true;
@@ -143,12 +149,18 @@ export function createGuardLayer(options) {
                 decision = await promise;
             } catch (e) {
                 syncInGuard = false;
-                if (isCancelError(e)) return { block: true };
+                if (isCancelError(e)) {
+                    return { block: true };
+                }
                 onError?.({ type: 'guard-throw', error: e }, { url, from });
                 return { block: true };
             }
-            if (signal.aborted) return { block: true };
-            if (decision !== 'allow') return decision;
+            if (signal.aborted) {
+                return { block: true };
+            }
+            if (decision !== 'allow') {
+                return decision;
+            }
         }
         return 'allow';
     }
@@ -165,7 +177,9 @@ export function createGuardLayer(options) {
      * >}
      */
     async function runGuardChain(startUrl) {
-        if (currentAbort) currentAbort.abort();
+        if (currentAbort) {
+            currentAbort.abort();
+        }
         let controller = new AbortController();
         currentAbort = controller;
 
@@ -242,7 +256,9 @@ export function createGuardLayer(options) {
             }
         } finally {
             pendingState = null;
-            if (currentAbort === controller) currentAbort = null;
+            if (currentAbort === controller) {
+                currentAbort = null;
+            }
         }
     }
 
@@ -267,8 +283,12 @@ export function createGuardLayer(options) {
         }
 
         const result = await runGuardChain(url);
-        if (result.aborted) return { status: 'blocked' };
-        if (result.decision === 'block') return { status: 'blocked' };
+        if (result.aborted) {
+            return { status: 'blocked' };
+        }
+        if (result.decision === 'block') {
+            return { status: 'blocked' };
+        }
 
         const finalMode = result.hadRedirect ? 'replace' : mode;
         const router = /** @type {Router} */ (boundRouter);
@@ -286,7 +306,9 @@ export function createGuardLayer(options) {
      */
     async function handlePopstateAsync(targetUrl, from, e, cb) {
         const result = await runGuardChain(targetUrl);
-        if (result.aborted) return;
+        if (result.aborted) {
+            return;
+        }
 
         const router = /** @type {Router} */ (boundRouter);
         const wrapped = /** @type {UrlAdapter} */ (wrappedAdapter);
@@ -361,9 +383,13 @@ export function createGuardLayer(options) {
      * Current in-flight guard state; `null` when idle. `signal` is the
      * `AbortSignal` of the in-flight run — aborts when a newer navigation
      * starts, or a redirect-iteration begins.
+     *
+     * @returns {{ url: string, since: number, signal: AbortSignal } | null}
      */
     function pending() {
-        if (!pendingState || !currentAbort) return null;
+        if (!pendingState || !currentAbort) {
+            return null;
+        }
         return {
             url: pendingState.url,
             since: pendingState.since,

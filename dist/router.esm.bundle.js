@@ -92,16 +92,28 @@ function isFolder(x) {
   x[FOLDER_BRAND] === true;
 }
 function parseKey(key) {
-  if (typeof key !== "string") return null;
-  if (key === "*") return { kind: "wildcard" };
-  if (key === "index") return { kind: "index" };
+  if (typeof key !== "string") {
+    return null;
+  }
+  if (key === "*") {
+    return { kind: "wildcard" };
+  }
+  if (key === "index") {
+    return { kind: "index" };
+  }
   if (key.startsWith(":")) {
     const name = key.slice(1);
-    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) return null;
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+      return null;
+    }
     return { kind: "param", name };
   }
-  if (!/^[A-Za-z0-9._~-]+$/.test(key)) return null;
-  if (key === "." || key === "..") return null;
+  if (!/^[A-Za-z0-9._~-]+$/.test(key)) {
+    return null;
+  }
+  if (key === "." || key === "..") {
+    return null;
+  }
   return { kind: "literal" };
 }
 function isAsyncFunction(fn) {
@@ -120,39 +132,98 @@ function normalizeRRU(url) {
   return stripped + search;
 }
 function isValidRRU(url) {
-  if (typeof url !== "string") return false;
-  if (url.length === 0) return false;
-  if (!url.startsWith("/")) return false;
-  if (url.includes("#")) return false;
+  if (typeof url !== "string") {
+    return false;
+  }
+  if (url.length === 0) {
+    return false;
+  }
+  if (!url.startsWith("/")) {
+    return false;
+  }
+  if (url.includes("#")) {
+    return false;
+  }
   return true;
 }
 
 // src/matching.js
-function match(rootChildren, url, mapNotFound) {
+function match(rootChildren, folderIndex, url, mapNotFound) {
   const normalized = normalizeRRU(url);
   const pathname2 = extractPathname(normalized);
   const search = parseSearch(extractSearch(normalized));
   const segments = splitSegments(pathname2);
-  const result = walk(rootChildren, segments, [], {}, mapNotFound);
+  const rootIndex = folderIndex.get(rootChildren);
+  const result = rootIndex ? walk(folderIndex, rootIndex, segments, [], {}, mapNotFound) : (
+    /** @type {WalkResult} */
+    {
+      status: "notFound",
+      chain: [],
+      partialParams: {},
+      handler: mapNotFound
+    }
+  );
   return (
     /** @type {MatchResult} */
     { ...result, url: normalized, search }
   );
 }
-function buildUrl(rootChildren, name, params) {
-  const result = buildUrlImpl(rootChildren, name, params, "");
-  if (result === null) {
+function buildUrl(urlTemplates, name, params) {
+  const template = urlTemplates.get(name);
+  if (template === void 0) {
     throw new TypeError(`url(): route ${JSON.stringify(name)} not found in this map`);
+  }
+  return applyTemplate(template, params);
+}
+function parseTemplate(path) {
+  const parts = [];
+  let litStart = 0;
+  let i = 0;
+  while (i < path.length) {
+    if (path[i] === ":") {
+      if (i > litStart) {
+        parts.push({ lit: path.slice(litStart, i) });
+      }
+      let j = i + 1;
+      while (j < path.length && path[j] !== "/") {
+        j++;
+      }
+      parts.push({ param: path.slice(i + 1, j) });
+      i = j;
+      litStart = j;
+    } else {
+      i++;
+    }
+  }
+  if (litStart < path.length) {
+    parts.push({ lit: path.slice(litStart) });
+  }
+  return parts;
+}
+function applyTemplate(template, params) {
+  let result = "";
+  for (let k = 0; k < template.length; k++) {
+    const part = template[k];
+    if ("lit" in part) {
+      result += part.lit;
+    } else {
+      const val = params ? params[part.param] : void 0;
+      if (typeof val !== "string" || val === "" || val === "." || val === "..") {
+        throw new TypeError(
+          `url(): missing or invalid param ${JSON.stringify(part.param)}`
+        );
+      }
+      result += encodeURIComponent(val);
+    }
   }
   return result;
 }
-function walk(children, segments, partialChain, params, mapNotFound) {
+function walk(folderIndex, index, segments, partialChain, params, mapNotFound) {
   if (segments.length === 0) {
-    if (Object.prototype.hasOwnProperty.call(children, "index")) {
-      const child = children["index"];
+    if (index.index) {
       return {
         status: "matched",
-        chain: [...partialChain, child],
+        chain: [...partialChain, index.index],
         params: { ...params }
       };
     }
@@ -167,57 +238,68 @@ function walk(children, segments, partialChain, params, mapNotFound) {
   const rest = segments.slice(1);
   const decoded = tryDecode(seg);
   if (decoded !== null) {
-    for (const key of Object.keys(children)) {
-      if (!isLiteralKey(key)) continue;
-      if (key !== decoded) continue;
-      const child = children[key];
-      if (isFolder(child)) {
-        return walk(child.children, rest, [...partialChain, child], params, mapNotFound);
-      }
-      if (rest.length === 0) {
+    const literal = index.literals.get(decoded);
+    if (literal) {
+      if (isFolder(literal)) {
+        const childIndex = folderIndex.get(literal.children);
+        if (childIndex) {
+          return walk(
+            folderIndex,
+            childIndex,
+            rest,
+            [...partialChain, literal],
+            params,
+            mapNotFound
+          );
+        }
+      } else if (rest.length === 0) {
         return {
           status: "matched",
-          chain: [...partialChain, child],
+          chain: [...partialChain, literal],
           params: { ...params }
         };
       }
       return {
         status: "notFound",
-        chain: [...partialChain, child],
+        chain: [...partialChain, literal],
         partialParams: { ...params },
-        handler: handlerFor([...partialChain, child], mapNotFound)
+        handler: handlerFor([...partialChain, literal], mapNotFound)
       };
     }
   }
-  if (decoded !== null && decoded !== "") {
-    for (const key of Object.keys(children)) {
-      if (!key.startsWith(":")) continue;
-      const paramName = key.slice(1);
-      const child = children[key];
-      const newParams = { ...params, [paramName]: decoded };
-      if (isFolder(child)) {
-        return walk(child.children, rest, [...partialChain, child], newParams, mapNotFound);
+  if (decoded !== null && decoded !== "" && index.param) {
+    const child = index.param.node;
+    const newParams = { ...params, [index.param.name]: decoded };
+    if (isFolder(child)) {
+      const childIndex = folderIndex.get(child.children);
+      if (childIndex) {
+        return walk(
+          folderIndex,
+          childIndex,
+          rest,
+          [...partialChain, child],
+          newParams,
+          mapNotFound
+        );
       }
-      if (rest.length === 0) {
-        return {
-          status: "matched",
-          chain: [...partialChain, child],
-          params: newParams
-        };
-      }
+    } else if (rest.length === 0) {
       return {
-        status: "notFound",
+        status: "matched",
         chain: [...partialChain, child],
-        partialParams: newParams,
-        handler: handlerFor([...partialChain, child], mapNotFound)
+        params: newParams
       };
     }
+    return {
+      status: "notFound",
+      chain: [...partialChain, child],
+      partialParams: newParams,
+      handler: handlerFor([...partialChain, child], mapNotFound)
+    };
   }
-  if (Object.prototype.hasOwnProperty.call(children, "*")) {
-    const child = children["*"];
+  if (index.wildcard) {
     return {
       status: "matched",
-      chain: [...partialChain, child],
+      chain: [...partialChain, index.wildcard],
       params: { ...params }
     };
   }
@@ -237,9 +319,6 @@ function handlerFor(chain, mapNotFound) {
   }
   return mapNotFound;
 }
-function isLiteralKey(key) {
-  return key !== "*" && !key.startsWith(":") && key !== "index";
-}
 function tryDecode(seg) {
   try {
     return decodeURIComponent(seg);
@@ -253,7 +332,9 @@ function extractSearch(url) {
 }
 function parseSearch(query) {
   const result = {};
-  if (!query) return result;
+  if (!query) {
+    return result;
+  }
   new URLSearchParams(query).forEach((v, k) => {
     result[k] = v;
   });
@@ -264,36 +345,11 @@ function extractPathname(url) {
   return q >= 0 ? url.slice(0, q) : url;
 }
 function splitSegments(pathname2) {
-  if (pathname2 === "/") return [];
+  if (pathname2 === "/") {
+    return [];
+  }
   const stripped = pathname2.startsWith("/") ? pathname2.slice(1) : pathname2;
   return stripped.split("/");
-}
-function buildUrlImpl(children, name, params, pathSoFar) {
-  for (const key of Object.keys(children)) {
-    if (key === "*") continue;
-    let segment = null;
-    if (key === "index") {
-      segment = null;
-    } else if (key.startsWith(":")) {
-      const paramName = key.slice(1);
-      const val = params && params[paramName];
-      if (typeof val !== "string" || val === "" || val === "." || val === "..") {
-        continue;
-      }
-      segment = encodeURIComponent(val);
-    } else {
-      segment = key;
-    }
-    const newPath = segment === null ? pathSoFar : pathSoFar + "/" + segment;
-    const child = children[key];
-    if (isFolder(child)) {
-      const result = buildUrlImpl(child.children, name, params, newPath);
-      if (result !== null) return result;
-    } else if (child.name === name) {
-      return newPath;
-    }
-  }
-  return null;
 }
 
 // src/route.js
@@ -362,15 +418,9 @@ function createMap(data, options) {
   const seenNames = /* @__PURE__ */ new Set();
   const keyMap = /* @__PURE__ */ new WeakMap();
   const leafParams = /* @__PURE__ */ new Map();
-  collectTree(
-    /** @type {Children} */
-    data,
-    "",
-    seenNames,
-    keyMap,
-    leafParams,
-    []
-  );
+  const urlTemplates = /* @__PURE__ */ new Map();
+  const folderIndex = /* @__PURE__ */ new WeakMap();
+  collectTree(data, "", seenNames, keyMap, leafParams, urlTemplates, folderIndex, []);
   const routeCache = /* @__PURE__ */ new Map();
   const notFound = options.notFound;
   const rootChildren = (
@@ -385,14 +435,16 @@ function createMap(data, options) {
      * @returns {string}
      */
     url(name, ...args) {
-      return buildUrl(rootChildren, name, args[0]);
+      return buildUrl(urlTemplates, name, args[0]);
     },
     route(name) {
       const cached = routeCache.get(name);
-      if (cached) return (
-        /** @type {any} */
-        cached
-      );
+      if (cached) {
+        return (
+          /** @type {any} */
+          cached
+        );
+      }
       const params = leafParams.get(name);
       if (params === void 0) {
         throw new TypeError(`route(): route ${JSON.stringify(name)} not found in this map`);
@@ -400,7 +452,7 @@ function createMap(data, options) {
       const r = createRoute({
         name,
         params,
-        buildUrl: (p) => buildUrl(rootChildren, name, p)
+        buildUrl: (p) => buildUrl(urlTemplates, name, p)
       });
       routeCache.set(name, r);
       return (
@@ -409,7 +461,7 @@ function createMap(data, options) {
       );
     },
     match(url) {
-      return match(rootChildren, url, notFound);
+      return match(rootChildren, folderIndex, url, notFound);
     }
   };
   Object.defineProperty(map, MAP_BRAND, { value: true });
@@ -423,7 +475,14 @@ function isMap(x) {
   return x !== null && typeof x === "object" && /** @type {any} */
   x[MAP_BRAND] === true;
 }
-function collectTree(children, pathPrefix, seenNames, keyMap, leafParams, parentParams) {
+function collectTree(children, pathPrefix, seenNames, keyMap, leafParams, urlTemplates, folderIndex, parentParams) {
+  const index = {
+    literals: /* @__PURE__ */ new Map(),
+    param: null,
+    wildcard: null,
+    index: null
+  };
+  folderIndex.set(children, index);
   for (const key of Object.keys(children)) {
     const childPath = pathPrefix + "/" + key;
     const child = children[key];
@@ -439,10 +498,30 @@ function collectTree(children, pathPrefix, seenNames, keyMap, leafParams, parent
       seenNames.add(child.name);
       if (key !== "*") {
         leafParams.set(child.name, Object.freeze(childParams));
+        const templatePath = key === "index" ? pathPrefix : childPath;
+        urlTemplates.set(child.name, Object.freeze(parseTemplate(templatePath)));
       }
     }
     if (isFolder(child)) {
-      collectTree(child.children, childPath, seenNames, keyMap, leafParams, childParams);
+      collectTree(
+        child.children,
+        childPath,
+        seenNames,
+        keyMap,
+        leafParams,
+        urlTemplates,
+        folderIndex,
+        childParams
+      );
+    }
+    if (key === "*") {
+      index.wildcard = child;
+    } else if (key === "index") {
+      index.index = child;
+    } else if (key.startsWith(":")) {
+      index.param = { name: key.slice(1), node: child };
+    } else {
+      index.literals.set(key, child);
     }
   }
 }
@@ -451,8 +530,12 @@ function defaultMessageFor(code, path) {
   return `Invalid map${where}: ${code}`;
 }
 function hasRoute(map, name) {
-  if (!map || typeof map !== "object") return false;
-  if (typeof name !== "string" || name.length === 0) return false;
+  if (!map || typeof map !== "object") {
+    return false;
+  }
+  if (typeof name !== "string" || name.length === 0) {
+    return false;
+  }
   const fn = (
     /** @type {any} */
     map[kHasRoute]
@@ -461,12 +544,18 @@ function hasRoute(map, name) {
 }
 function hasRouteImpl(children, name) {
   for (const key of Object.keys(children)) {
-    if (key === "*") continue;
+    if (key === "*") {
+      continue;
+    }
     const child = children[key];
     if (isFile(child)) {
-      if (child.name === name) return true;
+      if (child.name === name) {
+        return true;
+      }
     } else if (isFolder(child)) {
-      if (hasRouteImpl(child.children, name)) return true;
+      if (hasRouteImpl(child.children, name)) {
+        return true;
+      }
     }
   }
   return false;
@@ -1132,7 +1221,9 @@ function commonChainPrefix(prev, next, getKeysMap2) {
   const nextPrefixes = urlPrefixes(next.chain, next, getKeysMap2(next.map));
   const n = Math.min(prevPrefixes.length, nextPrefixes.length);
   for (let i = 0; i < n; i++) {
-    if (prevPrefixes[i] !== nextPrefixes[i]) return i;
+    if (prevPrefixes[i] !== nextPrefixes[i]) {
+      return i;
+    }
   }
   return n;
 }
@@ -1153,8 +1244,12 @@ function buildSnapshot(navigationId, map, status, chain, params, partialParams, 
     url,
     leaf: frozenChain.length > 0 ? frozenChain[frozenChain.length - 1] : void 0
   };
-  if (status === "notFound") snap.notFoundResult = notFoundResult;
-  if (redirectedFrom !== void 0) snap.redirectedFrom = redirectedFrom;
+  if (status === "notFound") {
+    snap.notFoundResult = notFoundResult;
+  }
+  if (redirectedFrom !== void 0) {
+    snap.redirectedFrom = redirectedFrom;
+  }
   return (
     /** @type {Snapshot} */
     Object.freeze(snap)
@@ -1210,7 +1305,9 @@ function runTransaction(source, inputUrl, env) {
   const originalUrl = url;
   if (isNoopEligible && prevSnapshot && prevSnapshot.status !== "error") {
     const current = normalizeRRU(env.adapter.read());
-    if (url === current) return prevSnapshot;
+    if (url === current) {
+      return prevSnapshot;
+    }
   }
   const redirectPath = [];
   let depth = 0;
@@ -1444,11 +1541,15 @@ function getKeysMap(map) {
 }
 function handleError(type, extra, prevSnapshot, isInitial, navigationType, env) {
   if (isInitial) {
-    if (extra.error !== void 0) throw extra.error;
+    if (extra.error !== void 0) {
+      throw extra.error;
+    }
     throw new TypeError(`initial transaction failed: ${type}`);
   }
   if (env.dev) {
-    if (extra.error !== void 0) throw extra.error;
+    if (extra.error !== void 0) {
+      throw extra.error;
+    }
     throw new TypeError(type);
   }
   if (!prevSnapshot) {
@@ -1483,8 +1584,12 @@ function defaultPreload(leaf, ctx) {
     /** @type {any} */
     leaf
   );
-  if (typeof meta.preload === "function") return meta.preload(ctx);
-  if (typeof meta.load === "function") return meta.load();
+  if (typeof meta.preload === "function") {
+    return meta.preload(ctx);
+  }
+  if (typeof meta.load === "function") {
+    return meta.load();
+  }
   return void 0;
 }
 
@@ -1570,7 +1675,9 @@ function createRouter(options) {
     inTransaction = false;
   }
   adapter.listen(() => {
-    if (inTransaction) return;
+    if (inTransaction) {
+      return;
+    }
     inTransaction = true;
     try {
       currentSnapshot = runTransaction("popstate", adapter.read(), env);
@@ -1639,9 +1746,15 @@ function createRouter(options) {
     }
     const normalized = normalizeRRU(urlStr);
     const resolved = resolveMap({ state: getState(), url: normalized });
-    if (resolved instanceof Promise) throw new TypeError("resolver-promise");
-    if (resolved == null) throw new TypeError("resolver-null");
-    if (!isMap(resolved)) throw new TypeError("resolver-invalid");
+    if (resolved instanceof Promise) {
+      throw new TypeError("resolver-promise");
+    }
+    if (resolved == null) {
+      throw new TypeError("resolver-null");
+    }
+    if (!isMap(resolved)) {
+      throw new TypeError("resolver-invalid");
+    }
     return resolved;
   }
   function getRedirectPath() {
@@ -1651,16 +1764,26 @@ function createRouter(options) {
     return eventBus.on("commit", ({ snapshot }) => listener(snapshot));
   }
   async function prefetch(url2, opts = {}) {
-    if (!isValidRRU(url2)) return;
+    if (!isValidRRU(url2)) {
+      return;
+    }
     const snap = currentSnapshot;
-    if (!snap) return;
+    if (!snap) {
+      return;
+    }
     const normalized = normalizeRRU(url2);
     const match2 = snap.map.match(normalized);
-    if (match2.status !== "matched") return;
+    if (match2.status !== "matched") {
+      return;
+    }
     const leaf = match2.chain.length > 0 ? match2.chain[match2.chain.length - 1] : void 0;
-    if (!leaf) return;
+    if (!leaf) {
+      return;
+    }
     const signal = opts.signal ?? new AbortController().signal;
-    if (signal.aborted) return;
+    if (signal.aborted) {
+      return;
+    }
     try {
       await defaultPreload(leaf, { signal });
     } catch {
@@ -1673,10 +1796,14 @@ function createRouter(options) {
     revalidate,
     prefetch,
     back() {
-      if (typeof history !== "undefined") history.back();
+      if (typeof history !== "undefined") {
+        history.back();
+      }
     },
     forward() {
-      if (typeof history !== "undefined") history.forward();
+      if (typeof history !== "undefined") {
+        history.forward();
+      }
     },
     url,
     route,

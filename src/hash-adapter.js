@@ -67,31 +67,31 @@ export function createHashAdapter({ base } = {}) {
                 );
             }
             const hash = location.hash.slice(1);
-            if (!hash.startsWith('/') || hash.includes('#')) return '/';
+            if (!hash.startsWith('/') || hash.includes('#')) {return '/';}
             return hash;
         },
 
         write(url, mode) {
-            if (typeof history === 'undefined') return;
+            if (typeof history === 'undefined') {return;}
             const full = resolvedBase + location.search + '#' + url;
-            if (mode === 'push') history.pushState(null, '', full);
-            else history.replaceState(null, '', full);
+            if (mode === 'push') {history.pushState(null, '', full);}
+            else {history.replaceState(null, '', full);}
         },
 
         listen(cb) {
-            if (typeof addEventListener === 'undefined') return () => {};
+            if (typeof addEventListener === 'undefined') {return () => {};}
             addEventListener('hashchange', cb);
             return () => removeEventListener('hashchange', cb);
         },
 
         normalize(href) {
             const abs = new URL(href, location.href);
-            if (abs.origin !== location.origin) return null;
-            if (abs.pathname !== location.pathname) return null;
-            if (abs.search !== location.search) return null;
+            if (abs.origin !== location.origin) {return null;}
+            if (abs.pathname !== location.pathname) {return null;}
+            if (abs.search !== location.search) {return null;}
             const rru = abs.hash.slice(1);
-            if (!rru.startsWith('/')) return null;
-            if (rru.includes('#')) return null;
+            if (!rru.startsWith('/')) {return null;}
+            if (rru.includes('#')) {return null;}
             return rru;
         },
 
@@ -117,12 +117,12 @@ export function createHashAdapter({ base } = {}) {
         },
 
         historyState() {
-            if (typeof history === 'undefined') return null;
+            if (typeof history === 'undefined') {return null;}
             return history.state;
         },
 
         replaceState(state) {
-            if (typeof history === 'undefined' || typeof location === 'undefined') return;
+            if (typeof history === 'undefined' || typeof location === 'undefined') {return;}
             history.replaceState(state, '', location.href);
         },
     };

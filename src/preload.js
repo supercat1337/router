@@ -22,7 +22,7 @@
  */
 export function defaultPreload(leaf, ctx) {
     const meta = /** @type {any} */ (leaf);
-    if (typeof meta.preload === 'function') return meta.preload(ctx);
-    if (typeof meta.load === 'function') return meta.load();
+    if (typeof meta.preload === 'function') {return meta.preload(ctx);}
+    if (typeof meta.load === 'function') {return meta.load();}
     return undefined;
 }

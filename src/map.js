@@ -2,7 +2,7 @@
 
 import { isFile, isFolder, parseKey } from './data-model.js';
 import { MAP_BRAND } from './internal/symbols.js';
-import { buildUrl, match } from './matching.js';
+import { buildUrl, match, parseTemplate } from './matching.js';
 import { createRoute } from './route.js';
 
 /**
@@ -12,6 +12,8 @@ import { createRoute } from './route.js';
  * @typedef {import('./types.js').Node} Node
  * @typedef {import('./types.js').Children} Children
  * @typedef {import('./types.js').Route} Route
+ * @typedef {import('./matching.js').FolderIndex} FolderIndex
+ * @typedef {import('./matching.js').UrlTemplate} UrlTemplate
  */
 
 /**
@@ -32,11 +34,6 @@ const kHasRoute = Symbol('router.map.hasRoute');
 
 /**
  * Thrown by `createMap` when a tree-wide invariant is violated.
- *
- * `code` identifies the invariant; `path` locates the offending node
- * (`/admin/users/:id`) or key (`:id`); `''` when the violation is at the
- * map level with no specific path. Subtree-shape violations are thrown by
- * `folder` as plain `TypeError` and never reach `createMap`.
  */
 export class MapValidationError extends Error {
     /** @type {MapValidationErrorCode} */
@@ -60,14 +57,9 @@ export class MapValidationError extends Error {
 /**
  * Create an immutable router map.
  *
- * Validates tree-wide invariants — top-level data shape, top-level key
- * syntax, `index` at root, `notFound` presence and function-ness, node
- * construction, name uniqueness. Subtree-shape is already validated by
- * `folder`; this function re-checks the branded-node predicate during
- * traversal but does not re-check key syntax inside folders.
- *
- * The returned object is frozen and branded; it exposes `notFound`, `url`,
- * and `match`. `isMap` is the only supported way to detect one.
+ * Precomputes two accelerators alongside validation:
+ * - `urlTemplates`: `Map<name, TemplatePart[]>` for O(template) `url()`.
+ * - `folderIndex`: `WeakMap<Children, FolderIndex>` for O(1) `match()`.
  *
  * @param {Record<string, Node>} data
  * @param {{ notFound: NotFoundHandler }} options
@@ -102,7 +94,11 @@ export function createMap(data, options) {
     const keyMap = new WeakMap();
     /** @type {Map<string, readonly string[]>} */
     const leafParams = new Map();
-    collectTree(/** @type {Children} */ (data), '', seenNames, keyMap, leafParams, []);
+    /** @type {Map<string, UrlTemplate>} */
+    const urlTemplates = new Map();
+    /** @type {WeakMap<object, FolderIndex>} */
+    const folderIndex = new WeakMap();
+    collectTree(data, '', seenNames, keyMap, leafParams, urlTemplates, folderIndex, []);
 
     /** @type {Map<string, Route>} */
     const routeCache = new Map();
@@ -119,11 +115,11 @@ export function createMap(data, options) {
          * @returns {string}
          */
         url(name, ...args) {
-            return buildUrl(rootChildren, name, args[0]);
+            return buildUrl(urlTemplates, name, args[0]);
         },
         route(/** @type {string} */ name) {
             const cached = routeCache.get(name);
-            if (cached) return /** @type {any} */ (cached);
+            if (cached) {return /** @type {any} */ (cached);}
             const params = leafParams.get(name);
             if (params === undefined) {
                 throw new TypeError(`route(): route ${JSON.stringify(name)} not found in this map`);
@@ -131,13 +127,13 @@ export function createMap(data, options) {
             const r = createRoute({
                 name,
                 params,
-                buildUrl: p => buildUrl(rootChildren, name, p),
+                buildUrl: p => buildUrl(urlTemplates, name, p),
             });
             routeCache.set(name, r);
             return /** @type {any} */ (r);
         },
         match(url) {
-            return match(rootChildren, url, notFound);
+            return match(rootChildren, folderIndex, url, notFound);
         },
     };
     Object.defineProperty(map, MAP_BRAND, { value: true });
@@ -159,18 +155,38 @@ export function isMap(x) {
 }
 
 /**
- * Walk the tree for node construction, name uniqueness, and `:name`
- * accumulation along the path to each leaf.
+ * Walk the tree once — validate, collect names/params, build URL templates,
+ * and build the `FolderIndex` used by `match()`.
  *
  * @param {Children} children
  * @param {string} pathPrefix
  * @param {Set<string>} seenNames
  * @param {WeakMap<Node, string>} keyMap
  * @param {Map<string, readonly string[]>} leafParams
+ * @param {Map<string, UrlTemplate>} urlTemplates
+ * @param {WeakMap<object, FolderIndex>} folderIndex
  * @param {readonly string[]} parentParams
  * @returns {void}
  */
-function collectTree(children, pathPrefix, seenNames, keyMap, leafParams, parentParams) {
+function collectTree(
+    children,
+    pathPrefix,
+    seenNames,
+    keyMap,
+    leafParams,
+    urlTemplates,
+    folderIndex,
+    parentParams
+) {
+    /** @type {FolderIndex} */
+    const index = {
+        literals: new Map(),
+        param: null,
+        wildcard: null,
+        index: null,
+    };
+    folderIndex.set(children, index);
+
     for (const key of Object.keys(children)) {
         const childPath = pathPrefix + '/' + key;
         const child = children[key];
@@ -179,20 +195,41 @@ function collectTree(children, pathPrefix, seenNames, keyMap, leafParams, parent
         }
         keyMap.set(child, key);
         const childParams = key.startsWith(':') ? [...parentParams, key.slice(1)] : parentParams;
+
         if (isFile(child)) {
             if (seenNames.has(child.name)) {
                 throw new MapValidationError('name-duplicate', childPath);
             }
             seenNames.add(child.name);
-            // Wildcard (`*`) has no canonical URL — `url()` / `route()` /
-            // `hasRoute()` all reject it, matching `buildUrlImpl` and
-            // `hasRouteImpl`. Do not register it in `leafParams`.
+            // Wildcard has no canonical URL — not registered for `url()`.
             if (key !== '*') {
                 leafParams.set(child.name, Object.freeze(childParams));
+                const templatePath = key === 'index' ? pathPrefix : childPath;
+                urlTemplates.set(child.name, Object.freeze(parseTemplate(templatePath)));
             }
         }
         if (isFolder(child)) {
-            collectTree(child.children, childPath, seenNames, keyMap, leafParams, childParams);
+            collectTree(
+                child.children,
+                childPath,
+                seenNames,
+                keyMap,
+                leafParams,
+                urlTemplates,
+                folderIndex,
+                childParams
+            );
+        }
+
+        // Populate the per-folder index for O(1) `match()`.
+        if (key === '*') {
+            index.wildcard = child;
+        } else if (key === 'index') {
+            index.index = child;
+        } else if (key.startsWith(':')) {
+            index.param = { name: key.slice(1), node: child };
+        } else {
+            index.literals.set(key, child);
         }
     }
 }
@@ -208,29 +245,14 @@ function defaultMessageFor(code, path) {
 }
 
 /**
- * Check whether a route with a canonical URL exists for `name` in `map`.
- *
- * Returns `true` iff `map.url(name, ...)` would not throw for the reason
- * "route not found" — i.e. there is a non-wildcard leaf with
- * `name === name`. Parameter validity is **not** checked: `hasRoute` may
- * return `true` while `url(name)` still throws for missing or invalid
- * `:name` params.
- *
- * Wildcard-only routes (`*`) have no canonical URL and return `false`.
- * Non-map / non-string / empty-string inputs return `false`.
- *
- * Intended for one-shot validation of route names from config / feature
- * flags / external sources at data-load time. O(N) in tree size;
- * no memoization — do not call per render.
- *
  * @public
  * @param {RouterMap} map
  * @param {string} name
  * @returns {boolean}
  */
 export function hasRoute(map, name) {
-    if (!map || typeof map !== 'object') return false;
-    if (typeof name !== 'string' || name.length === 0) return false;
+    if (!map || typeof map !== 'object') {return false;}
+    if (typeof name !== 'string' || name.length === 0) {return false;}
     const fn = /** @type {any} */ (map)[kHasRoute];
     return typeof fn === 'function' ? fn(name) : false;
 }
@@ -243,12 +265,12 @@ export function hasRoute(map, name) {
  */
 function hasRouteImpl(children, name) {
     for (const key of Object.keys(children)) {
-        if (key === '*') continue;
+        if (key === '*') {continue;}
         const child = children[key];
         if (isFile(child)) {
-            if (child.name === name) return true;
+            if (child.name === name) {return true;}
         } else if (isFolder(child)) {
-            if (hasRouteImpl(child.children, name)) return true;
+            if (hasRouteImpl(child.children, name)) {return true;}
         }
     }
     return false;

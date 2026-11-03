@@ -127,12 +127,18 @@ export function createRouter(options) {
         }
     }
 
-    /** @param {string} url */
+    /**
+     * @param {string} url
+     * @returns {Snapshot}
+     */
     function navigate(url) {
         return wrap(() => runTransaction('navigate', url, env));
     }
 
-    /** @param {string} url */
+    /**
+     * @param {string} url
+     * @returns {Snapshot}
+     */
     function replace(url) {
         return wrap(() => runTransaction('replace', url, env));
     }
@@ -151,7 +157,9 @@ export function createRouter(options) {
 
     // popstate — synchronous, mirrors initial/navigate.
     adapter.listen(() => {
-        if (inTransaction) return;
+        if (inTransaction) {
+            return;
+        }
         inTransaction = true;
         try {
             currentSnapshot = runTransaction('popstate', adapter.read(), env);
@@ -191,6 +199,7 @@ export function createRouter(options) {
 
     /**
      * @param {number} id
+     * @returns {boolean}
      */
     function isCurrent(id) {
         return currentSnapshot !== null && currentSnapshot.navigationId === id;
@@ -272,9 +281,15 @@ export function createRouter(options) {
         }
         const normalized = normalizeRRU(urlStr);
         const resolved = resolveMap({ state: getState(), url: normalized });
-        if (resolved instanceof Promise) throw new TypeError('resolver-promise');
-        if (resolved == null) throw new TypeError('resolver-null');
-        if (!isMap(resolved)) throw new TypeError('resolver-invalid');
+        if (resolved instanceof Promise) {
+            throw new TypeError('resolver-promise');
+        }
+        if (resolved == null) {
+            throw new TypeError('resolver-null');
+        }
+        if (!isMap(resolved)) {
+            throw new TypeError('resolver-invalid');
+        }
         return resolved;
     }
 
@@ -287,7 +302,10 @@ export function createRouter(options) {
         return lastRedirectPath;
     }
 
-    /** @param {(snapshot: Snapshot) => void} listener */
+    /**
+     * @param {(snapshot: Snapshot) => void} listener
+     * @returns {() => void}
+     */
     function subscribe(listener) {
         return eventBus.on('commit', ({ snapshot }) => listener(snapshot));
     }
@@ -310,16 +328,26 @@ export function createRouter(options) {
      * @returns {Promise<void>}
      */
     async function prefetch(url, opts = {}) {
-        if (!isValidRRU(url)) return;
+        if (!isValidRRU(url)) {
+            return;
+        }
         const snap = currentSnapshot;
-        if (!snap) return;
+        if (!snap) {
+            return;
+        }
         const normalized = normalizeRRU(url);
         const match = snap.map.match(normalized);
-        if (match.status !== 'matched') return;
+        if (match.status !== 'matched') {
+            return;
+        }
         const leaf = match.chain.length > 0 ? match.chain[match.chain.length - 1] : undefined;
-        if (!leaf) return;
+        if (!leaf) {
+            return;
+        }
         const signal = opts.signal ?? new AbortController().signal;
-        if (signal.aborted) return;
+        if (signal.aborted) {
+            return;
+        }
         try {
             await defaultPreload(leaf, { signal });
         } catch {
@@ -334,10 +362,14 @@ export function createRouter(options) {
         revalidate,
         prefetch,
         back() {
-            if (typeof history !== 'undefined') history.back();
+            if (typeof history !== 'undefined') {
+                history.back();
+            }
         },
         forward() {
-            if (typeof history !== 'undefined') history.forward();
+            if (typeof history !== 'undefined') {
+                history.forward();
+            }
         },
         url,
         route,

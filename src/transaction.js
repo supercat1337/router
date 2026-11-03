@@ -100,7 +100,7 @@ export function runTransaction(source, inputUrl, env) {
     // No-op for navigate/replace (skip when the current snapshot is error).
     if (isNoopEligible && prevSnapshot && prevSnapshot.status !== 'error') {
         const current = normalizeRRU(env.adapter.read());
-        if (url === current) return prevSnapshot;
+        if (url === current) {return prevSnapshot;}
     }
 
     /** @type {string[]} */
@@ -372,11 +372,11 @@ function getKeysMap(map) {
  */
 function handleError(type, extra, prevSnapshot, isInitial, navigationType, env) {
     if (isInitial) {
-        if (extra.error !== undefined) throw extra.error;
+        if (extra.error !== undefined) {throw extra.error;}
         throw new TypeError(`initial transaction failed: ${type}`);
     }
     if (env.dev) {
-        if (extra.error !== undefined) throw extra.error;
+        if (extra.error !== undefined) {throw extra.error;}
         throw new TypeError(type);
     }
     /* c8 ignore next 4 */

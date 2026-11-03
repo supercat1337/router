@@ -161,16 +161,16 @@ export function isFolder(x) {
  * @returns {ParsedKey | null}
  */
 export function parseKey(key) {
-    if (typeof key !== 'string') return null;
-    if (key === '*') return { kind: 'wildcard' };
-    if (key === 'index') return { kind: 'index' };
+    if (typeof key !== 'string') {return null;}
+    if (key === '*') {return { kind: 'wildcard' };}
+    if (key === 'index') {return { kind: 'index' };}
     if (key.startsWith(':')) {
         const name = key.slice(1);
-        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) return null;
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {return null;}
         return { kind: 'param', name };
     }
-    if (!/^[A-Za-z0-9._~-]+$/.test(key)) return null;
-    if (key === '.' || key === '..') return null;
+    if (!/^[A-Za-z0-9._~-]+$/.test(key)) {return null;}
+    if (key === '.' || key === '..') {return null;}
     return { kind: 'literal' };
 }
 

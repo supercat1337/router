@@ -11,7 +11,9 @@ function validateBase(base) {
   return base.endsWith("/") ? base : base + "/";
 }
 function resolveBase(explicitBase) {
-  if (explicitBase !== void 0) return validateBase(explicitBase);
+  if (explicitBase !== void 0) {
+    return validateBase(explicitBase);
+  }
   if (typeof document !== "undefined") {
     const baseEl = (
       /** @type {HTMLBaseElement | null} */
@@ -20,7 +22,9 @@ function resolveBase(explicitBase) {
     const href = baseEl ? baseEl.href : void 0;
     if (href) {
       const path = new URL(href).pathname;
-      if (path.endsWith("/")) return validateBase(path);
+      if (path.endsWith("/")) {
+        return validateBase(path);
+      }
       throw new TypeError(
         "createPathAdapter: <base href> must end with '/' (base = " + JSON.stringify(path) + ")"
       );
@@ -35,33 +39,50 @@ function createPathAdapter({ base } = {}) {
   return {
     base: resolvedBase,
     read() {
-      if (typeof location === "undefined") return "/";
+      if (typeof location === "undefined") {
+        return "/";
+      }
       const path = location.pathname;
-      if (!path.startsWith(resolvedBase)) return "/";
+      if (!path.startsWith(resolvedBase)) {
+        return "/";
+      }
       const rru = "/" + path.slice(resolvedBase.length) + location.search;
       return rru.includes("#") ? "/" : rru;
     },
     write(url, mode) {
-      if (typeof history === "undefined") return;
+      if (typeof history === "undefined") {
+        return;
+      }
       const full = resolvedBase + url.slice(1);
-      if (mode === "push") history.pushState(null, "", full);
-      else history.replaceState(null, "", full);
+      if (mode === "push") {
+        history.pushState(null, "", full);
+      } else {
+        history.replaceState(null, "", full);
+      }
     },
     listen(cb) {
-      if (typeof addEventListener === "undefined") return () => {
-      };
+      if (typeof addEventListener === "undefined") {
+        return () => {
+        };
+      }
       addEventListener("popstate", cb);
       return () => removeEventListener("popstate", cb);
     },
     normalize(href) {
       const abs = new URL(href, location.href);
-      if (abs.origin !== location.origin) return null;
+      if (abs.origin !== location.origin) {
+        return null;
+      }
       if (abs.protocol !== "http:" && abs.protocol !== "https:") {
         return null;
       }
-      if (!abs.pathname.startsWith(resolvedBase)) return null;
+      if (!abs.pathname.startsWith(resolvedBase)) {
+        return null;
+      }
       const sameDoc = abs.pathname === location.pathname && abs.search === location.search;
-      if (sameDoc && abs.hash !== "") return null;
+      if (sameDoc && abs.hash !== "") {
+        return null;
+      }
       const rest = abs.pathname.slice(resolvedBase.length);
       return "/" + rest + abs.search;
     },
@@ -74,11 +95,15 @@ function createPathAdapter({ base } = {}) {
       return resolvedBase + rru.slice(1);
     },
     historyState() {
-      if (typeof history === "undefined") return null;
+      if (typeof history === "undefined") {
+        return null;
+      }
       return history.state;
     },
     replaceState(state) {
-      if (typeof history === "undefined" || typeof location === "undefined") return;
+      if (typeof history === "undefined" || typeof location === "undefined") {
+        return;
+      }
       history.replaceState(state, "", location.href);
     }
   };
@@ -110,29 +135,48 @@ function createHashAdapter({ base } = {}) {
         );
       }
       const hash = location.hash.slice(1);
-      if (!hash.startsWith("/") || hash.includes("#")) return "/";
+      if (!hash.startsWith("/") || hash.includes("#")) {
+        return "/";
+      }
       return hash;
     },
     write(url, mode) {
-      if (typeof history === "undefined") return;
+      if (typeof history === "undefined") {
+        return;
+      }
       const full = resolvedBase + location.search + "#" + url;
-      if (mode === "push") history.pushState(null, "", full);
-      else history.replaceState(null, "", full);
+      if (mode === "push") {
+        history.pushState(null, "", full);
+      } else {
+        history.replaceState(null, "", full);
+      }
     },
     listen(cb) {
-      if (typeof addEventListener === "undefined") return () => {
-      };
+      if (typeof addEventListener === "undefined") {
+        return () => {
+        };
+      }
       addEventListener("hashchange", cb);
       return () => removeEventListener("hashchange", cb);
     },
     normalize(href) {
       const abs = new URL(href, location.href);
-      if (abs.origin !== location.origin) return null;
-      if (abs.pathname !== location.pathname) return null;
-      if (abs.search !== location.search) return null;
+      if (abs.origin !== location.origin) {
+        return null;
+      }
+      if (abs.pathname !== location.pathname) {
+        return null;
+      }
+      if (abs.search !== location.search) {
+        return null;
+      }
       const rru = abs.hash.slice(1);
-      if (!rru.startsWith("/")) return null;
-      if (rru.includes("#")) return null;
+      if (!rru.startsWith("/")) {
+        return null;
+      }
+      if (rru.includes("#")) {
+        return null;
+      }
       return rru;
     },
     href(rru, opts = {}) {
@@ -155,11 +199,15 @@ function createHashAdapter({ base } = {}) {
       return resolvedBase + search + "#" + rru;
     },
     historyState() {
-      if (typeof history === "undefined") return null;
+      if (typeof history === "undefined") {
+        return null;
+      }
       return history.state;
     },
     replaceState(state) {
-      if (typeof history === "undefined" || typeof location === "undefined") return;
+      if (typeof history === "undefined" || typeof location === "undefined") {
+        return;
+      }
       history.replaceState(state, "", location.href);
     }
   };

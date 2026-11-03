@@ -192,16 +192,16 @@ function isFolder(x) {
  * @returns {ParsedKey | null}
  */
 function parseKey(key) {
-    if (typeof key !== 'string') return null;
-    if (key === '*') return { kind: 'wildcard' };
-    if (key === 'index') return { kind: 'index' };
+    if (typeof key !== 'string') {return null;}
+    if (key === '*') {return { kind: 'wildcard' };}
+    if (key === 'index') {return { kind: 'index' };}
     if (key.startsWith(':')) {
         const name = key.slice(1);
-        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) return null;
+        if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {return null;}
         return { kind: 'param', name };
     }
-    if (!/^[A-Za-z0-9._~-]+$/.test(key)) return null;
-    if (key === '.' || key === '..') return null;
+    if (!/^[A-Za-z0-9._~-]+$/.test(key)) {return null;}
+    if (key === '.' || key === '..') {return null;}
     return { kind: 'literal' };
 }
 
@@ -255,10 +255,10 @@ function normalizeRRU(url) {
  * @returns {boolean}
  */
 function isValidRRU(url) {
-    if (typeof url !== 'string') return false;
-    if (url.length === 0) return false;
-    if (!url.startsWith('/')) return false;
-    if (url.includes('#')) return false;
+    if (typeof url !== 'string') {return false;}
+    if (url.length === 0) {return false;}
+    if (!url.startsWith('/')) {return false;}
+    if (url.includes('#')) {return false;}
     return true;
 }
 
@@ -275,55 +275,139 @@ function isValidRRU(url) {
  */
 
 /**
+ * @typedef {{ lit: string } | { param: string }} TemplatePart
+ * @typedef {readonly TemplatePart[]} UrlTemplate
+ *
+ * @typedef {object} FolderIndex
+ * @property {Map<string, Node>} literals  — literal keys → node
+ * @property {{ name: string, node: Node } | null} param — the single `:name` at this level
+ * @property {Node | null} wildcard — the `*` file, if any
+ * @property {Node | null} index — the `index` file, if any
+ *
+ * @typedef {import('./map.js').kKeysMap} _kKeysMapUnused
+ */
+
+/**
  * Match a normalized RRU against a map's root children.
  *
  * @internal
  * @param {Children} rootChildren
+ * @param {WeakMap<object, FolderIndex>} folderIndex
  * @param {string} url
  * @param {NotFoundHandler} mapNotFound
  * @returns {MatchResult}
  */
-function match(rootChildren, url, mapNotFound) {
+function match(rootChildren, folderIndex, url, mapNotFound) {
     const normalized = normalizeRRU(url);
     const pathname = extractPathname(normalized);
     const search = parseSearch(extractSearch(normalized));
     const segments = splitSegments(pathname);
-    const result = walk(rootChildren, segments, [], {}, mapNotFound);
+    const rootIndex = folderIndex.get(rootChildren);
+    const result = rootIndex
+        ? walk(folderIndex, rootIndex, segments, [], {}, mapNotFound)
+        : /** @type {WalkResult} */ ({
+              status: 'notFound',
+              chain: [],
+              partialParams: {},
+              handler: mapNotFound,
+          });
     return /** @type {MatchResult} */ ({ ...result, url: normalized, search });
 }
 
 /**
  * Build a canonical RRU for a named route.
  *
+ * O(template length) — precomputed templates, no tree traversal.
+ *
  * @internal
- * @param {Children} rootChildren
+ * @param {Map<string, UrlTemplate>} urlTemplates
  * @param {string} name
  * @param {Record<string, string> | undefined} params
  * @returns {string}
  */
-function buildUrl(rootChildren, name, params) {
-    const result = buildUrlImpl(rootChildren, name, params, '');
-    if (result === null) {
+function buildUrl(urlTemplates, name, params) {
+    const template = urlTemplates.get(name);
+    if (template === undefined) {
         throw new TypeError(`url(): route ${JSON.stringify(name)} not found in this map`);
+    }
+    return applyTemplate(template, params);
+}
+
+/**
+ * Parse a path with `:name` placeholders into a flat template array.
+ * Used by `createMap` to precompute URL templates.
+ *
+ * `'/users/:id/edit'` → `[{ lit: '/users/' }, { param: 'id' }, { lit: '/edit' }]`
+ * `'/admin'` → `[{ lit: '/admin' }]`
+ *
+ * @internal
+ * @param {string} path
+ * @returns {UrlTemplate}
+ */
+function parseTemplate(path) {
+    /** @type {TemplatePart[]} */
+    const parts = [];
+    let litStart = 0;
+    let i = 0;
+    while (i < path.length) {
+        if (path[i] === ':') {
+            if (i > litStart) {parts.push({ lit: path.slice(litStart, i) });}
+            let j = i + 1;
+            while (j < path.length && path[j] !== '/') {j++;}
+            parts.push({ param: path.slice(i + 1, j) });
+            i = j;
+            litStart = j;
+        } else {
+            i++;
+        }
+    }
+    if (litStart < path.length) {parts.push({ lit: path.slice(litStart) });}
+    return parts;
+}
+
+/**
+ * @param {UrlTemplate} template
+ * @param {Record<string, string> | undefined} params
+ * @returns {string}
+ */
+function applyTemplate(template, params) {
+    let result = '';
+    for (let k = 0; k < template.length; k++) {
+        const part = template[k];
+        if ('lit' in part) {
+            result += part.lit;
+        } else {
+            const val = params ? params[part.param] : undefined;
+            if (typeof val !== 'string' || val === '' || val === '.' || val === '..') {
+                throw new TypeError(
+                    `url(): missing or invalid param ${JSON.stringify(part.param)}`
+                );
+            }
+            result += encodeURIComponent(val);
+        }
     }
     return result;
 }
 
 /**
- * @param {Children} children
+ * Walk the tree using the precomputed `FolderIndex` — no `Object.keys`
+ * allocation, no linear scan. O(depth × branching), but branching is
+ * constant (one `Map.get` per level).
+ *
+ * @param {WeakMap<object, FolderIndex>} folderIndex
+ * @param {FolderIndex} index
  * @param {string[]} segments
  * @param {Node[]} partialChain
  * @param {Record<string, string>} params
  * @param {NotFoundHandler} mapNotFound
  * @returns {WalkResult}
  */
-function walk(children, segments, partialChain, params, mapNotFound) {
+function walk(folderIndex, index, segments, partialChain, params, mapNotFound) {
     if (segments.length === 0) {
-        if (Object.prototype.hasOwnProperty.call(children, 'index')) {
-            const child = children['index'];
+        if (index.index) {
             return {
                 status: 'matched',
-                chain: [...partialChain, child],
+                chain: [...partialChain, index.index],
                 params: { ...params },
             };
         }
@@ -339,60 +423,74 @@ function walk(children, segments, partialChain, params, mapNotFound) {
     const rest = segments.slice(1);
     const decoded = tryDecode(seg);
 
+    // Literal wins over `:name`, `:name` wins over `*` — at every level.
     if (decoded !== null) {
-        for (const key of Object.keys(children)) {
-            if (!isLiteralKey(key)) continue;
-            if (key !== decoded) continue;
-            const child = children[key];
-            if (isFolder(child)) {
-                return walk(child.children, rest, [...partialChain, child], params, mapNotFound);
-            }
-            if (rest.length === 0) {
+        const literal = index.literals.get(decoded);
+        if (literal) {
+            if (isFolder(literal)) {
+                const childIndex = folderIndex.get(literal.children);
+                if (childIndex) {
+                    return walk(
+                        folderIndex,
+                        childIndex,
+                        rest,
+                        [...partialChain, literal],
+                        params,
+                        mapNotFound
+                    );
+                }
+            } else if (rest.length === 0) {
                 return {
                     status: 'matched',
-                    chain: [...partialChain, child],
+                    chain: [...partialChain, literal],
                     params: { ...params },
                 };
             }
+            // Literal leaf with trailing segments — notFound (no backtracking).
             return {
                 status: 'notFound',
-                chain: [...partialChain, child],
+                chain: [...partialChain, literal],
                 partialParams: { ...params },
-                handler: handlerFor([...partialChain, child], mapNotFound),
+                handler: handlerFor([...partialChain, literal], mapNotFound),
             };
         }
     }
 
-    if (decoded !== null && decoded !== '') {
-        for (const key of Object.keys(children)) {
-            if (!key.startsWith(':')) continue;
-            const paramName = key.slice(1);
-            const child = children[key];
-            const newParams = { ...params, [paramName]: decoded };
-            if (isFolder(child)) {
-                return walk(child.children, rest, [...partialChain, child], newParams, mapNotFound);
+    // `:name` does not match an empty segment, nor an invalid percent-encoding.
+    if (decoded !== null && decoded !== '' && index.param) {
+        const child = index.param.node;
+        const newParams = { ...params, [index.param.name]: decoded };
+        if (isFolder(child)) {
+            const childIndex = folderIndex.get(child.children);
+            if (childIndex) {
+                return walk(
+                    folderIndex,
+                    childIndex,
+                    rest,
+                    [...partialChain, child],
+                    newParams,
+                    mapNotFound
+                );
             }
-            if (rest.length === 0) {
-                return {
-                    status: 'matched',
-                    chain: [...partialChain, child],
-                    params: newParams,
-                };
-            }
+        } else if (rest.length === 0) {
             return {
-                status: 'notFound',
+                status: 'matched',
                 chain: [...partialChain, child],
-                partialParams: newParams,
-                handler: handlerFor([...partialChain, child], mapNotFound),
+                params: newParams,
             };
         }
+        return {
+            status: 'notFound',
+            chain: [...partialChain, child],
+            partialParams: newParams,
+            handler: handlerFor([...partialChain, child], mapNotFound),
+        };
     }
 
-    if (Object.prototype.hasOwnProperty.call(children, '*')) {
-        const child = children['*'];
+    if (index.wildcard) {
         return {
             status: 'matched',
-            chain: [...partialChain, child],
+            chain: [...partialChain, index.wildcard],
             params: { ...params },
         };
     }
@@ -418,14 +516,6 @@ function handlerFor(chain, mapNotFound) {
         }
     }
     return mapNotFound;
-}
-
-/**
- * @param {string} key
- * @returns {boolean}
- */
-function isLiteralKey(key) {
-    return key !== '*' && !key.startsWith(':') && key !== 'index';
 }
 
 /**
@@ -459,7 +549,7 @@ function extractSearch(url) {
 function parseSearch(query) {
     /** @type {Record<string, string>} */
     const result = {};
-    if (!query) return result;
+    if (!query) {return result;}
     new URLSearchParams(query).forEach((v, k) => {
         result[k] = v;
     });
@@ -483,59 +573,9 @@ function extractPathname(url) {
  * @returns {string[]}
  */
 function splitSegments(pathname) {
-    if (pathname === '/') return [];
+    if (pathname === '/') {return [];}
     const stripped = pathname.startsWith('/') ? pathname.slice(1) : pathname;
     return stripped.split('/');
-}
-
-/**
- * Recursive search for a leaf with `name === target`. Returns the encoded
- * RRU or `null` if no such leaf exists.
- *
- * **Invalid `:name` value aborts the branch entirely** (`continue`).
- * Entering a folder without the segment would produce a malformed path.
- * Uniqueness of `name` (enforced by `createMap`) guarantees that if the
- * target exists, it is found via some other, valid branch, or via this
- * branch once params are supplied — otherwise `buildUrl` throws
- * `TypeError`.
- *
- * @param {Children} children
- * @param {string} name
- * @param {Record<string, string> | undefined} params
- * @param {string} pathSoFar
- * @returns {string | null}
- */
-function buildUrlImpl(children, name, params, pathSoFar) {
-    for (const key of Object.keys(children)) {
-        if (key === '*') continue;
-
-        /** @type {string | null} */
-        let segment = null;
-
-        if (key === 'index') {
-            segment = null;
-        } else if (key.startsWith(':')) {
-            const paramName = key.slice(1);
-            const val = params && params[paramName];
-            if (typeof val !== 'string' || val === '' || val === '.' || val === '..') {
-                continue;
-            }
-            segment = encodeURIComponent(val);
-        } else {
-            segment = key;
-        }
-
-        const newPath = segment === null ? pathSoFar : pathSoFar + '/' + segment;
-        const child = children[key];
-
-        if (isFolder(child)) {
-            const result = buildUrlImpl(child.children, name, params, newPath);
-            if (result !== null) return result;
-        } else if (child.name === name) {
-            return newPath;
-        }
-    }
-    return null;
 }
 
 // @ts-check
@@ -594,6 +634,8 @@ function isRoute(x) {
  * @typedef {import('./types.js').Node} Node
  * @typedef {import('./types.js').Children} Children
  * @typedef {import('./types.js').Route} Route
+ * @typedef {import('./matching.js').FolderIndex} FolderIndex
+ * @typedef {import('./matching.js').UrlTemplate} UrlTemplate
  */
 
 /**
@@ -614,11 +656,6 @@ const kHasRoute = Symbol('router.map.hasRoute');
 
 /**
  * Thrown by `createMap` when a tree-wide invariant is violated.
- *
- * `code` identifies the invariant; `path` locates the offending node
- * (`/admin/users/:id`) or key (`:id`); `''` when the violation is at the
- * map level with no specific path. Subtree-shape violations are thrown by
- * `folder` as plain `TypeError` and never reach `createMap`.
  */
 class MapValidationError extends Error {
     /** @type {MapValidationErrorCode} */
@@ -642,14 +679,9 @@ class MapValidationError extends Error {
 /**
  * Create an immutable router map.
  *
- * Validates tree-wide invariants — top-level data shape, top-level key
- * syntax, `index` at root, `notFound` presence and function-ness, node
- * construction, name uniqueness. Subtree-shape is already validated by
- * `folder`; this function re-checks the branded-node predicate during
- * traversal but does not re-check key syntax inside folders.
- *
- * The returned object is frozen and branded; it exposes `notFound`, `url`,
- * and `match`. `isMap` is the only supported way to detect one.
+ * Precomputes two accelerators alongside validation:
+ * - `urlTemplates`: `Map<name, TemplatePart[]>` for O(template) `url()`.
+ * - `folderIndex`: `WeakMap<Children, FolderIndex>` for O(1) `match()`.
  *
  * @param {Record<string, Node>} data
  * @param {{ notFound: NotFoundHandler }} options
@@ -684,7 +716,11 @@ function createMap(data, options) {
     const keyMap = new WeakMap();
     /** @type {Map<string, readonly string[]>} */
     const leafParams = new Map();
-    collectTree(/** @type {Children} */ (data), '', seenNames, keyMap, leafParams, []);
+    /** @type {Map<string, UrlTemplate>} */
+    const urlTemplates = new Map();
+    /** @type {WeakMap<object, FolderIndex>} */
+    const folderIndex = new WeakMap();
+    collectTree(data, '', seenNames, keyMap, leafParams, urlTemplates, folderIndex, []);
 
     /** @type {Map<string, Route>} */
     const routeCache = new Map();
@@ -701,11 +737,11 @@ function createMap(data, options) {
          * @returns {string}
          */
         url(name, ...args) {
-            return buildUrl(rootChildren, name, args[0]);
+            return buildUrl(urlTemplates, name, args[0]);
         },
         route(/** @type {string} */ name) {
             const cached = routeCache.get(name);
-            if (cached) return /** @type {any} */ (cached);
+            if (cached) {return /** @type {any} */ (cached);}
             const params = leafParams.get(name);
             if (params === undefined) {
                 throw new TypeError(`route(): route ${JSON.stringify(name)} not found in this map`);
@@ -713,13 +749,13 @@ function createMap(data, options) {
             const r = createRoute({
                 name,
                 params,
-                buildUrl: p => buildUrl(rootChildren, name, p),
+                buildUrl: p => buildUrl(urlTemplates, name, p),
             });
             routeCache.set(name, r);
             return /** @type {any} */ (r);
         },
         match(url) {
-            return match(rootChildren, url, notFound);
+            return match(rootChildren, folderIndex, url, notFound);
         },
     };
     Object.defineProperty(map, MAP_BRAND, { value: true });
@@ -741,18 +777,38 @@ function isMap(x) {
 }
 
 /**
- * Walk the tree for node construction, name uniqueness, and `:name`
- * accumulation along the path to each leaf.
+ * Walk the tree once — validate, collect names/params, build URL templates,
+ * and build the `FolderIndex` used by `match()`.
  *
  * @param {Children} children
  * @param {string} pathPrefix
  * @param {Set<string>} seenNames
  * @param {WeakMap<Node, string>} keyMap
  * @param {Map<string, readonly string[]>} leafParams
+ * @param {Map<string, UrlTemplate>} urlTemplates
+ * @param {WeakMap<object, FolderIndex>} folderIndex
  * @param {readonly string[]} parentParams
  * @returns {void}
  */
-function collectTree(children, pathPrefix, seenNames, keyMap, leafParams, parentParams) {
+function collectTree(
+    children,
+    pathPrefix,
+    seenNames,
+    keyMap,
+    leafParams,
+    urlTemplates,
+    folderIndex,
+    parentParams
+) {
+    /** @type {FolderIndex} */
+    const index = {
+        literals: new Map(),
+        param: null,
+        wildcard: null,
+        index: null,
+    };
+    folderIndex.set(children, index);
+
     for (const key of Object.keys(children)) {
         const childPath = pathPrefix + '/' + key;
         const child = children[key];
@@ -761,20 +817,41 @@ function collectTree(children, pathPrefix, seenNames, keyMap, leafParams, parent
         }
         keyMap.set(child, key);
         const childParams = key.startsWith(':') ? [...parentParams, key.slice(1)] : parentParams;
+
         if (isFile(child)) {
             if (seenNames.has(child.name)) {
                 throw new MapValidationError('name-duplicate', childPath);
             }
             seenNames.add(child.name);
-            // Wildcard (`*`) has no canonical URL — `url()` / `route()` /
-            // `hasRoute()` all reject it, matching `buildUrlImpl` and
-            // `hasRouteImpl`. Do not register it in `leafParams`.
+            // Wildcard has no canonical URL — not registered for `url()`.
             if (key !== '*') {
                 leafParams.set(child.name, Object.freeze(childParams));
+                const templatePath = key === 'index' ? pathPrefix : childPath;
+                urlTemplates.set(child.name, Object.freeze(parseTemplate(templatePath)));
             }
         }
         if (isFolder(child)) {
-            collectTree(child.children, childPath, seenNames, keyMap, leafParams, childParams);
+            collectTree(
+                child.children,
+                childPath,
+                seenNames,
+                keyMap,
+                leafParams,
+                urlTemplates,
+                folderIndex,
+                childParams
+            );
+        }
+
+        // Populate the per-folder index for O(1) `match()`.
+        if (key === '*') {
+            index.wildcard = child;
+        } else if (key === 'index') {
+            index.index = child;
+        } else if (key.startsWith(':')) {
+            index.param = { name: key.slice(1), node: child };
+        } else {
+            index.literals.set(key, child);
         }
     }
 }
@@ -790,29 +867,14 @@ function defaultMessageFor(code, path) {
 }
 
 /**
- * Check whether a route with a canonical URL exists for `name` in `map`.
- *
- * Returns `true` iff `map.url(name, ...)` would not throw for the reason
- * "route not found" — i.e. there is a non-wildcard leaf with
- * `name === name`. Parameter validity is **not** checked: `hasRoute` may
- * return `true` while `url(name)` still throws for missing or invalid
- * `:name` params.
- *
- * Wildcard-only routes (`*`) have no canonical URL and return `false`.
- * Non-map / non-string / empty-string inputs return `false`.
- *
- * Intended for one-shot validation of route names from config / feature
- * flags / external sources at data-load time. O(N) in tree size;
- * no memoization — do not call per render.
- *
  * @public
  * @param {RouterMap} map
  * @param {string} name
  * @returns {boolean}
  */
 function hasRoute(map, name) {
-    if (!map || typeof map !== 'object') return false;
-    if (typeof name !== 'string' || name.length === 0) return false;
+    if (!map || typeof map !== 'object') {return false;}
+    if (typeof name !== 'string' || name.length === 0) {return false;}
     const fn = /** @type {any} */ (map)[kHasRoute];
     return typeof fn === 'function' ? fn(name) : false;
 }
@@ -825,12 +887,12 @@ function hasRoute(map, name) {
  */
 function hasRouteImpl(children, name) {
     for (const key of Object.keys(children)) {
-        if (key === '*') continue;
+        if (key === '*') {continue;}
         const child = children[key];
         if (isFile(child)) {
-            if (child.name === name) return true;
+            if (child.name === name) {return true;}
         } else if (isFolder(child)) {
-            if (hasRouteImpl(child.children, name)) return true;
+            if (hasRouteImpl(child.children, name)) {return true;}
         }
     }
     return false;
@@ -1066,7 +1128,7 @@ function commonChainPrefix(prev, next, getKeysMap) {
     const nextPrefixes = urlPrefixes(next.chain, next, getKeysMap(next.map));
     const n = Math.min(prevPrefixes.length, nextPrefixes.length);
     for (let i = 0; i < n; i++) {
-        if (prevPrefixes[i] !== nextPrefixes[i]) return i;
+        if (prevPrefixes[i] !== nextPrefixes[i]) {return i;}
     }
     return n;
 }
@@ -1116,8 +1178,8 @@ function buildSnapshot(
         url,
         leaf: frozenChain.length > 0 ? frozenChain[frozenChain.length - 1] : undefined,
     };
-    if (status === 'notFound') snap.notFoundResult = notFoundResult;
-    if (redirectedFrom !== undefined) snap.redirectedFrom = redirectedFrom;
+    if (status === 'notFound') {snap.notFoundResult = notFoundResult;}
+    if (redirectedFrom !== undefined) {snap.redirectedFrom = redirectedFrom;}
     return /** @type {Snapshot} */ (Object.freeze(snap));
 }
 
@@ -1258,7 +1320,7 @@ function runTransaction(source, inputUrl, env) {
     // No-op for navigate/replace (skip when the current snapshot is error).
     if (isNoopEligible && prevSnapshot && prevSnapshot.status !== 'error') {
         const current = normalizeRRU(env.adapter.read());
-        if (url === current) return prevSnapshot;
+        if (url === current) {return prevSnapshot;}
     }
 
     /** @type {string[]} */
@@ -1530,11 +1592,11 @@ function getKeysMap(map) {
  */
 function handleError(type, extra, prevSnapshot, isInitial, navigationType, env) {
     if (isInitial) {
-        if (extra.error !== undefined) throw extra.error;
+        if (extra.error !== undefined) {throw extra.error;}
         throw new TypeError(`initial transaction failed: ${type}`);
     }
     if (env.dev) {
-        if (extra.error !== undefined) throw extra.error;
+        if (extra.error !== undefined) {throw extra.error;}
         throw new TypeError(type);
     }
     /* c8 ignore next 4 */
@@ -1590,8 +1652,8 @@ function handleError(type, extra, prevSnapshot, isInitial, navigationType, env) 
  */
 function defaultPreload(leaf, ctx) {
     const meta = /** @type {any} */ (leaf);
-    if (typeof meta.preload === 'function') return meta.preload(ctx);
-    if (typeof meta.load === 'function') return meta.load();
+    if (typeof meta.preload === 'function') {return meta.preload(ctx);}
+    if (typeof meta.load === 'function') {return meta.load();}
     return undefined;
 }
 
@@ -1718,12 +1780,18 @@ function createRouter(options) {
         }
     }
 
-    /** @param {string} url */
+    /**
+     * @param {string} url
+     * @returns {Snapshot}
+     */
     function navigate(url) {
         return wrap(() => runTransaction('navigate', url, env));
     }
 
-    /** @param {string} url */
+    /**
+     * @param {string} url
+     * @returns {Snapshot}
+     */
     function replace(url) {
         return wrap(() => runTransaction('replace', url, env));
     }
@@ -1742,7 +1810,9 @@ function createRouter(options) {
 
     // popstate — synchronous, mirrors initial/navigate.
     adapter.listen(() => {
-        if (inTransaction) return;
+        if (inTransaction) {
+            return;
+        }
         inTransaction = true;
         try {
             currentSnapshot = runTransaction('popstate', adapter.read(), env);
@@ -1782,6 +1852,7 @@ function createRouter(options) {
 
     /**
      * @param {number} id
+     * @returns {boolean}
      */
     function isCurrent(id) {
         return currentSnapshot !== null && currentSnapshot.navigationId === id;
@@ -1863,9 +1934,15 @@ function createRouter(options) {
         }
         const normalized = normalizeRRU(urlStr);
         const resolved = resolveMap({ state: getState(), url: normalized });
-        if (resolved instanceof Promise) throw new TypeError('resolver-promise');
-        if (resolved == null) throw new TypeError('resolver-null');
-        if (!isMap(resolved)) throw new TypeError('resolver-invalid');
+        if (resolved instanceof Promise) {
+            throw new TypeError('resolver-promise');
+        }
+        if (resolved == null) {
+            throw new TypeError('resolver-null');
+        }
+        if (!isMap(resolved)) {
+            throw new TypeError('resolver-invalid');
+        }
         return resolved;
     }
 
@@ -1878,7 +1955,10 @@ function createRouter(options) {
         return lastRedirectPath;
     }
 
-    /** @param {(snapshot: Snapshot) => void} listener */
+    /**
+     * @param {(snapshot: Snapshot) => void} listener
+     * @returns {() => void}
+     */
     function subscribe(listener) {
         return eventBus.on('commit', ({ snapshot }) => listener(snapshot));
     }
@@ -1901,16 +1981,26 @@ function createRouter(options) {
      * @returns {Promise<void>}
      */
     async function prefetch(url, opts = {}) {
-        if (!isValidRRU(url)) return;
+        if (!isValidRRU(url)) {
+            return;
+        }
         const snap = currentSnapshot;
-        if (!snap) return;
+        if (!snap) {
+            return;
+        }
         const normalized = normalizeRRU(url);
         const match = snap.map.match(normalized);
-        if (match.status !== 'matched') return;
+        if (match.status !== 'matched') {
+            return;
+        }
         const leaf = match.chain.length > 0 ? match.chain[match.chain.length - 1] : undefined;
-        if (!leaf) return;
+        if (!leaf) {
+            return;
+        }
         const signal = opts.signal ?? new AbortController().signal;
-        if (signal.aborted) return;
+        if (signal.aborted) {
+            return;
+        }
         try {
             await defaultPreload(leaf, { signal });
         } catch {
@@ -1925,10 +2015,14 @@ function createRouter(options) {
         revalidate,
         prefetch,
         back() {
-            if (typeof history !== 'undefined') history.back();
+            if (typeof history !== 'undefined') {
+                history.back();
+            }
         },
         forward() {
-            if (typeof history !== 'undefined') history.forward();
+            if (typeof history !== 'undefined') {
+                history.forward();
+            }
         },
         url,
         route,

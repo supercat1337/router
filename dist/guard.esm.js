@@ -38,10 +38,10 @@ function normalizeRRU(url) {
  * @returns {boolean}
  */
 function isValidRRU(url) {
-    if (typeof url !== 'string') return false;
-    if (url.length === 0) return false;
-    if (!url.startsWith('/')) return false;
-    if (url.includes('#')) return false;
+    if (typeof url !== 'string') {return false;}
+    if (url.length === 0) {return false;}
+    if (!url.startsWith('/')) {return false;}
+    if (url.includes('#')) {return false;}
     return true;
 }
 
@@ -146,6 +146,8 @@ function createEventBus(onListenerError) {
  * @typedef {import('./types.js').Node} Node
  * @typedef {import('./types.js').Children} Children
  * @typedef {import('./types.js').Route} Route
+ * @typedef {import('./matching.js').FolderIndex} FolderIndex
+ * @typedef {import('./matching.js').UrlTemplate} UrlTemplate
  */
 
 /**
@@ -253,7 +255,7 @@ function commonChainPrefix(prev, next, getKeysMap) {
     const nextPrefixes = urlPrefixes(next.chain, next, getKeysMap(next.map));
     const n = Math.min(prevPrefixes.length, nextPrefixes.length);
     for (let i = 0; i < n; i++) {
-        if (prevPrefixes[i] !== nextPrefixes[i]) return i;
+        if (prevPrefixes[i] !== nextPrefixes[i]) {return i;}
     }
     return n;
 }
@@ -303,8 +305,8 @@ function buildSnapshot(
         url,
         leaf: frozenChain.length > 0 ? frozenChain[frozenChain.length - 1] : undefined,
     };
-    if (status === 'notFound') snap.notFoundResult = notFoundResult;
-    if (redirectedFrom !== undefined) snap.redirectedFrom = redirectedFrom;
+    if (status === 'notFound') {snap.notFoundResult = notFoundResult;}
+    if (redirectedFrom !== undefined) {snap.redirectedFrom = redirectedFrom;}
     return /** @type {Snapshot} */ (Object.freeze(snap));
 }
 
@@ -445,7 +447,7 @@ function runTransaction(source, inputUrl, env) {
     // No-op for navigate/replace (skip when the current snapshot is error).
     if (isNoopEligible && prevSnapshot && prevSnapshot.status !== 'error') {
         const current = normalizeRRU(env.adapter.read());
-        if (url === current) return prevSnapshot;
+        if (url === current) {return prevSnapshot;}
     }
 
     /** @type {string[]} */
@@ -717,11 +719,11 @@ function getKeysMap(map) {
  */
 function handleError(type, extra, prevSnapshot, isInitial, navigationType, env) {
     if (isInitial) {
-        if (extra.error !== undefined) throw extra.error;
+        if (extra.error !== undefined) {throw extra.error;}
         throw new TypeError(`initial transaction failed: ${type}`);
     }
     if (env.dev) {
-        if (extra.error !== undefined) throw extra.error;
+        if (extra.error !== undefined) {throw extra.error;}
         throw new TypeError(type);
     }
     /* c8 ignore next 4 */
@@ -777,8 +779,8 @@ function handleError(type, extra, prevSnapshot, isInitial, navigationType, env) 
  */
 function defaultPreload(leaf, ctx) {
     const meta = /** @type {any} */ (leaf);
-    if (typeof meta.preload === 'function') return meta.preload(ctx);
-    if (typeof meta.load === 'function') return meta.load();
+    if (typeof meta.preload === 'function') {return meta.preload(ctx);}
+    if (typeof meta.load === 'function') {return meta.load();}
     return undefined;
 }
 
@@ -905,12 +907,18 @@ function createRouter(options) {
         }
     }
 
-    /** @param {string} url */
+    /**
+     * @param {string} url
+     * @returns {Snapshot}
+     */
     function navigate(url) {
         return wrap(() => runTransaction('navigate', url, env));
     }
 
-    /** @param {string} url */
+    /**
+     * @param {string} url
+     * @returns {Snapshot}
+     */
     function replace(url) {
         return wrap(() => runTransaction('replace', url, env));
     }
@@ -929,7 +937,9 @@ function createRouter(options) {
 
     // popstate — synchronous, mirrors initial/navigate.
     adapter.listen(() => {
-        if (inTransaction) return;
+        if (inTransaction) {
+            return;
+        }
         inTransaction = true;
         try {
             currentSnapshot = runTransaction('popstate', adapter.read(), env);
@@ -969,6 +979,7 @@ function createRouter(options) {
 
     /**
      * @param {number} id
+     * @returns {boolean}
      */
     function isCurrent(id) {
         return currentSnapshot !== null && currentSnapshot.navigationId === id;
@@ -1050,9 +1061,15 @@ function createRouter(options) {
         }
         const normalized = normalizeRRU(urlStr);
         const resolved = resolveMap({ state: getState(), url: normalized });
-        if (resolved instanceof Promise) throw new TypeError('resolver-promise');
-        if (resolved == null) throw new TypeError('resolver-null');
-        if (!isMap(resolved)) throw new TypeError('resolver-invalid');
+        if (resolved instanceof Promise) {
+            throw new TypeError('resolver-promise');
+        }
+        if (resolved == null) {
+            throw new TypeError('resolver-null');
+        }
+        if (!isMap(resolved)) {
+            throw new TypeError('resolver-invalid');
+        }
         return resolved;
     }
 
@@ -1065,7 +1082,10 @@ function createRouter(options) {
         return lastRedirectPath;
     }
 
-    /** @param {(snapshot: Snapshot) => void} listener */
+    /**
+     * @param {(snapshot: Snapshot) => void} listener
+     * @returns {() => void}
+     */
     function subscribe(listener) {
         return eventBus.on('commit', ({ snapshot }) => listener(snapshot));
     }
@@ -1088,16 +1108,26 @@ function createRouter(options) {
      * @returns {Promise<void>}
      */
     async function prefetch(url, opts = {}) {
-        if (!isValidRRU(url)) return;
+        if (!isValidRRU(url)) {
+            return;
+        }
         const snap = currentSnapshot;
-        if (!snap) return;
+        if (!snap) {
+            return;
+        }
         const normalized = normalizeRRU(url);
         const match = snap.map.match(normalized);
-        if (match.status !== 'matched') return;
+        if (match.status !== 'matched') {
+            return;
+        }
         const leaf = match.chain.length > 0 ? match.chain[match.chain.length - 1] : undefined;
-        if (!leaf) return;
+        if (!leaf) {
+            return;
+        }
         const signal = opts.signal ?? new AbortController().signal;
-        if (signal.aborted) return;
+        if (signal.aborted) {
+            return;
+        }
         try {
             await defaultPreload(leaf, { signal });
         } catch {
@@ -1112,10 +1142,14 @@ function createRouter(options) {
         revalidate,
         prefetch,
         back() {
-            if (typeof history !== 'undefined') history.back();
+            if (typeof history !== 'undefined') {
+                history.back();
+            }
         },
         forward() {
-            if (typeof history !== 'undefined') history.forward();
+            if (typeof history !== 'undefined') {
+                history.forward();
+            }
         },
         url,
         route,
@@ -1262,7 +1296,9 @@ function createGuardLayer(options) {
      * @returns {boolean}
      */
     function isCancelError(e) {
-        if (!(e instanceof Error)) return false;
+        if (!(e instanceof Error)) {
+            return false;
+        }
         return e.name === 'CancelError' || (e.constructor && e.constructor.name === 'CancelError');
     }
 
@@ -1274,7 +1310,9 @@ function createGuardLayer(options) {
      * @returns {string | null}
      */
     function getRedirectTarget(decision) {
-        if (isRedirect(decision)) return decision.url;
+        if (isRedirect(decision)) {
+            return decision.url;
+        }
         if (typeof decision === 'object' && decision !== null && 'redirect' in decision) {
             return decision.redirect;
         }
@@ -1294,7 +1332,9 @@ function createGuardLayer(options) {
     async function runGuards(url, signal, from) {
         const facade = makeFacade();
         for (const guard of guards) {
-            if (signal.aborted) return { block: true };
+            if (signal.aborted) {
+                return { block: true };
+            }
             /** @type {Decision} */
             let decision;
             syncInGuard = true;
@@ -1304,12 +1344,18 @@ function createGuardLayer(options) {
                 decision = await promise;
             } catch (e) {
                 syncInGuard = false;
-                if (isCancelError(e)) return { block: true };
+                if (isCancelError(e)) {
+                    return { block: true };
+                }
                 onError?.({ type: 'guard-throw', error: e }, { url, from });
                 return { block: true };
             }
-            if (signal.aborted) return { block: true };
-            if (decision !== 'allow') return decision;
+            if (signal.aborted) {
+                return { block: true };
+            }
+            if (decision !== 'allow') {
+                return decision;
+            }
         }
         return 'allow';
     }
@@ -1326,7 +1372,9 @@ function createGuardLayer(options) {
      * >}
      */
     async function runGuardChain(startUrl) {
-        if (currentAbort) currentAbort.abort();
+        if (currentAbort) {
+            currentAbort.abort();
+        }
         let controller = new AbortController();
         currentAbort = controller;
 
@@ -1403,7 +1451,9 @@ function createGuardLayer(options) {
             }
         } finally {
             pendingState = null;
-            if (currentAbort === controller) currentAbort = null;
+            if (currentAbort === controller) {
+                currentAbort = null;
+            }
         }
     }
 
@@ -1428,8 +1478,12 @@ function createGuardLayer(options) {
         }
 
         const result = await runGuardChain(url);
-        if (result.aborted) return { status: 'blocked' };
-        if (result.decision === 'block') return { status: 'blocked' };
+        if (result.aborted) {
+            return { status: 'blocked' };
+        }
+        if (result.decision === 'block') {
+            return { status: 'blocked' };
+        }
 
         const finalMode = result.hadRedirect ? 'replace' : mode;
         const router = /** @type {Router} */ (boundRouter);
@@ -1447,7 +1501,9 @@ function createGuardLayer(options) {
      */
     async function handlePopstateAsync(targetUrl, from, e, cb) {
         const result = await runGuardChain(targetUrl);
-        if (result.aborted) return;
+        if (result.aborted) {
+            return;
+        }
 
         const router = /** @type {Router} */ (boundRouter);
         const wrapped = /** @type {UrlAdapter} */ (wrappedAdapter);
@@ -1522,9 +1578,13 @@ function createGuardLayer(options) {
      * Current in-flight guard state; `null` when idle. `signal` is the
      * `AbortSignal` of the in-flight run — aborts when a newer navigation
      * starts, or a redirect-iteration begins.
+     *
+     * @returns {{ url: string, since: number, signal: AbortSignal } | null}
      */
     function pending() {
-        if (!pendingState || !currentAbort) return null;
+        if (!pendingState || !currentAbort) {
+            return null;
+        }
         return {
             url: pendingState.url,
             since: pendingState.since,

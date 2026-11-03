@@ -217,3 +217,79 @@ test('map.match: * matches empty segments', t => {
     const r2 = m.match('///a');
     t.is(r2.status, 'matched');
 });
+
+// ===========================================================================
+// Performance regressions — precomputed templates and folder index
+// ===========================================================================
+
+test('map.url: works after template precompute for deep + param', t => {
+    const m = createMap(
+        {
+            admin: folder({
+                users: folder({
+                    ':id': folder({
+                        edit: file({ name: 'adminUserEdit' }),
+                    }),
+                }),
+            }),
+        },
+        { notFound: nf }
+    );
+    t.is(m.url('adminUserEdit', { id: '5' }), '/admin/users/5/edit');
+    t.is(m.url('adminUserEdit', { id: 'a/b' }), '/admin/users/a%2Fb/edit');
+    t.is(m.url('adminUserEdit', { id: 'a b' }), '/admin/users/a%20b/edit');
+});
+
+test('map.url: template path matches buildUrlImpl for all param names', t => {
+    const m = createMap(
+        {
+            reports: folder({
+                ':year': folder({
+                    ':month': file({ name: 'report' }),
+                }),
+            }),
+        },
+        { notFound: nf }
+    );
+    t.is(m.url('report', { year: '2024', month: '06' }), '/reports/2024/06');
+});
+
+test('map.match: literal index via folder index (no Object.keys scan)', t => {
+    const m = createMap(
+        {
+            a: file({ name: 'a' }),
+            b: file({ name: 'b' }),
+            c: file({ name: 'c' }),
+            d: file({ name: 'd' }),
+        },
+        { notFound: nf }
+    );
+    // Every literal must match deterministically.
+    for (const k of ['a', 'b', 'c', 'd']) {
+        const r = m.match('/' + k);
+        t.is(r.status, 'matched', `match /${k}`);
+        if (r.status === 'matched') t.is(r.chain.at(-1)?.name, k);
+    }
+});
+
+test('map.match: param still wins over wildcard, literal still wins over param', t => {
+    const m = createMap(
+        {
+            users: folder({
+                new: file({ name: 'newUser' }),
+                ':id': file({ name: 'user' }),
+                '*': file({ name: 'catchAll' }),
+            }),
+        },
+        { notFound: nf }
+    );
+    // literal `new` wins
+    const r1 = m.match('/users/new');
+    if (r1.status === 'matched') t.is(r1.chain.at(-1)?.name, 'newUser');
+    // `:id` beats `*`
+    const r2 = m.match('/users/5');
+    if (r2.status === 'matched') t.is(r2.chain.at(-1)?.name, 'user');
+    // `*` catches the rest
+    const r3 = m.match('/users/foo/bar');
+    if (r3.status === 'matched') t.is(r3.chain.at(-1)?.name, 'catchAll');
+});

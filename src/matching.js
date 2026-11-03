@@ -13,55 +13,139 @@ import { normalizeRRU } from './normalize.js';
  */
 
 /**
+ * @typedef {{ lit: string } | { param: string }} TemplatePart
+ * @typedef {readonly TemplatePart[]} UrlTemplate
+ *
+ * @typedef {object} FolderIndex
+ * @property {Map<string, Node>} literals  — literal keys → node
+ * @property {{ name: string, node: Node } | null} param — the single `:name` at this level
+ * @property {Node | null} wildcard — the `*` file, if any
+ * @property {Node | null} index — the `index` file, if any
+ *
+ * @typedef {import('./map.js').kKeysMap} _kKeysMapUnused
+ */
+
+/**
  * Match a normalized RRU against a map's root children.
  *
  * @internal
  * @param {Children} rootChildren
+ * @param {WeakMap<object, FolderIndex>} folderIndex
  * @param {string} url
  * @param {NotFoundHandler} mapNotFound
  * @returns {MatchResult}
  */
-export function match(rootChildren, url, mapNotFound) {
+export function match(rootChildren, folderIndex, url, mapNotFound) {
     const normalized = normalizeRRU(url);
     const pathname = extractPathname(normalized);
     const search = parseSearch(extractSearch(normalized));
     const segments = splitSegments(pathname);
-    const result = walk(rootChildren, segments, [], {}, mapNotFound);
+    const rootIndex = folderIndex.get(rootChildren);
+    const result = rootIndex
+        ? walk(folderIndex, rootIndex, segments, [], {}, mapNotFound)
+        : /** @type {WalkResult} */ ({
+              status: 'notFound',
+              chain: [],
+              partialParams: {},
+              handler: mapNotFound,
+          });
     return /** @type {MatchResult} */ ({ ...result, url: normalized, search });
 }
 
 /**
  * Build a canonical RRU for a named route.
  *
+ * O(template length) — precomputed templates, no tree traversal.
+ *
  * @internal
- * @param {Children} rootChildren
+ * @param {Map<string, UrlTemplate>} urlTemplates
  * @param {string} name
  * @param {Record<string, string> | undefined} params
  * @returns {string}
  */
-export function buildUrl(rootChildren, name, params) {
-    const result = buildUrlImpl(rootChildren, name, params, '');
-    if (result === null) {
+export function buildUrl(urlTemplates, name, params) {
+    const template = urlTemplates.get(name);
+    if (template === undefined) {
         throw new TypeError(`url(): route ${JSON.stringify(name)} not found in this map`);
+    }
+    return applyTemplate(template, params);
+}
+
+/**
+ * Parse a path with `:name` placeholders into a flat template array.
+ * Used by `createMap` to precompute URL templates.
+ *
+ * `'/users/:id/edit'` → `[{ lit: '/users/' }, { param: 'id' }, { lit: '/edit' }]`
+ * `'/admin'` → `[{ lit: '/admin' }]`
+ *
+ * @internal
+ * @param {string} path
+ * @returns {UrlTemplate}
+ */
+export function parseTemplate(path) {
+    /** @type {TemplatePart[]} */
+    const parts = [];
+    let litStart = 0;
+    let i = 0;
+    while (i < path.length) {
+        if (path[i] === ':') {
+            if (i > litStart) {parts.push({ lit: path.slice(litStart, i) });}
+            let j = i + 1;
+            while (j < path.length && path[j] !== '/') {j++;}
+            parts.push({ param: path.slice(i + 1, j) });
+            i = j;
+            litStart = j;
+        } else {
+            i++;
+        }
+    }
+    if (litStart < path.length) {parts.push({ lit: path.slice(litStart) });}
+    return parts;
+}
+
+/**
+ * @param {UrlTemplate} template
+ * @param {Record<string, string> | undefined} params
+ * @returns {string}
+ */
+function applyTemplate(template, params) {
+    let result = '';
+    for (let k = 0; k < template.length; k++) {
+        const part = template[k];
+        if ('lit' in part) {
+            result += part.lit;
+        } else {
+            const val = params ? params[part.param] : undefined;
+            if (typeof val !== 'string' || val === '' || val === '.' || val === '..') {
+                throw new TypeError(
+                    `url(): missing or invalid param ${JSON.stringify(part.param)}`
+                );
+            }
+            result += encodeURIComponent(val);
+        }
     }
     return result;
 }
 
 /**
- * @param {Children} children
+ * Walk the tree using the precomputed `FolderIndex` — no `Object.keys`
+ * allocation, no linear scan. O(depth × branching), but branching is
+ * constant (one `Map.get` per level).
+ *
+ * @param {WeakMap<object, FolderIndex>} folderIndex
+ * @param {FolderIndex} index
  * @param {string[]} segments
  * @param {Node[]} partialChain
  * @param {Record<string, string>} params
  * @param {NotFoundHandler} mapNotFound
  * @returns {WalkResult}
  */
-function walk(children, segments, partialChain, params, mapNotFound) {
+function walk(folderIndex, index, segments, partialChain, params, mapNotFound) {
     if (segments.length === 0) {
-        if (Object.prototype.hasOwnProperty.call(children, 'index')) {
-            const child = children['index'];
+        if (index.index) {
             return {
                 status: 'matched',
-                chain: [...partialChain, child],
+                chain: [...partialChain, index.index],
                 params: { ...params },
             };
         }
@@ -77,60 +161,74 @@ function walk(children, segments, partialChain, params, mapNotFound) {
     const rest = segments.slice(1);
     const decoded = tryDecode(seg);
 
+    // Literal wins over `:name`, `:name` wins over `*` — at every level.
     if (decoded !== null) {
-        for (const key of Object.keys(children)) {
-            if (!isLiteralKey(key)) continue;
-            if (key !== decoded) continue;
-            const child = children[key];
-            if (isFolder(child)) {
-                return walk(child.children, rest, [...partialChain, child], params, mapNotFound);
-            }
-            if (rest.length === 0) {
+        const literal = index.literals.get(decoded);
+        if (literal) {
+            if (isFolder(literal)) {
+                const childIndex = folderIndex.get(literal.children);
+                if (childIndex) {
+                    return walk(
+                        folderIndex,
+                        childIndex,
+                        rest,
+                        [...partialChain, literal],
+                        params,
+                        mapNotFound
+                    );
+                }
+            } else if (rest.length === 0) {
                 return {
                     status: 'matched',
-                    chain: [...partialChain, child],
+                    chain: [...partialChain, literal],
                     params: { ...params },
                 };
             }
+            // Literal leaf with trailing segments — notFound (no backtracking).
             return {
                 status: 'notFound',
-                chain: [...partialChain, child],
+                chain: [...partialChain, literal],
                 partialParams: { ...params },
-                handler: handlerFor([...partialChain, child], mapNotFound),
+                handler: handlerFor([...partialChain, literal], mapNotFound),
             };
         }
     }
 
-    if (decoded !== null && decoded !== '') {
-        for (const key of Object.keys(children)) {
-            if (!key.startsWith(':')) continue;
-            const paramName = key.slice(1);
-            const child = children[key];
-            const newParams = { ...params, [paramName]: decoded };
-            if (isFolder(child)) {
-                return walk(child.children, rest, [...partialChain, child], newParams, mapNotFound);
+    // `:name` does not match an empty segment, nor an invalid percent-encoding.
+    if (decoded !== null && decoded !== '' && index.param) {
+        const child = index.param.node;
+        const newParams = { ...params, [index.param.name]: decoded };
+        if (isFolder(child)) {
+            const childIndex = folderIndex.get(child.children);
+            if (childIndex) {
+                return walk(
+                    folderIndex,
+                    childIndex,
+                    rest,
+                    [...partialChain, child],
+                    newParams,
+                    mapNotFound
+                );
             }
-            if (rest.length === 0) {
-                return {
-                    status: 'matched',
-                    chain: [...partialChain, child],
-                    params: newParams,
-                };
-            }
+        } else if (rest.length === 0) {
             return {
-                status: 'notFound',
+                status: 'matched',
                 chain: [...partialChain, child],
-                partialParams: newParams,
-                handler: handlerFor([...partialChain, child], mapNotFound),
+                params: newParams,
             };
         }
+        return {
+            status: 'notFound',
+            chain: [...partialChain, child],
+            partialParams: newParams,
+            handler: handlerFor([...partialChain, child], mapNotFound),
+        };
     }
 
-    if (Object.prototype.hasOwnProperty.call(children, '*')) {
-        const child = children['*'];
+    if (index.wildcard) {
         return {
             status: 'matched',
-            chain: [...partialChain, child],
+            chain: [...partialChain, index.wildcard],
             params: { ...params },
         };
     }
@@ -156,14 +254,6 @@ function handlerFor(chain, mapNotFound) {
         }
     }
     return mapNotFound;
-}
-
-/**
- * @param {string} key
- * @returns {boolean}
- */
-function isLiteralKey(key) {
-    return key !== '*' && !key.startsWith(':') && key !== 'index';
 }
 
 /**
@@ -197,7 +287,7 @@ function extractSearch(url) {
 function parseSearch(query) {
     /** @type {Record<string, string>} */
     const result = {};
-    if (!query) return result;
+    if (!query) {return result;}
     new URLSearchParams(query).forEach((v, k) => {
         result[k] = v;
     });
@@ -221,57 +311,7 @@ function extractPathname(url) {
  * @returns {string[]}
  */
 function splitSegments(pathname) {
-    if (pathname === '/') return [];
+    if (pathname === '/') {return [];}
     const stripped = pathname.startsWith('/') ? pathname.slice(1) : pathname;
     return stripped.split('/');
-}
-
-/**
- * Recursive search for a leaf with `name === target`. Returns the encoded
- * RRU or `null` if no such leaf exists.
- *
- * **Invalid `:name` value aborts the branch entirely** (`continue`).
- * Entering a folder without the segment would produce a malformed path.
- * Uniqueness of `name` (enforced by `createMap`) guarantees that if the
- * target exists, it is found via some other, valid branch, or via this
- * branch once params are supplied — otherwise `buildUrl` throws
- * `TypeError`.
- *
- * @param {Children} children
- * @param {string} name
- * @param {Record<string, string> | undefined} params
- * @param {string} pathSoFar
- * @returns {string | null}
- */
-function buildUrlImpl(children, name, params, pathSoFar) {
-    for (const key of Object.keys(children)) {
-        if (key === '*') continue;
-
-        /** @type {string | null} */
-        let segment = null;
-
-        if (key === 'index') {
-            segment = null;
-        } else if (key.startsWith(':')) {
-            const paramName = key.slice(1);
-            const val = params && params[paramName];
-            if (typeof val !== 'string' || val === '' || val === '.' || val === '..') {
-                continue;
-            }
-            segment = encodeURIComponent(val);
-        } else {
-            segment = key;
-        }
-
-        const newPath = segment === null ? pathSoFar : pathSoFar + '/' + segment;
-        const child = children[key];
-
-        if (isFolder(child)) {
-            const result = buildUrlImpl(child.children, name, params, newPath);
-            if (result !== null) return result;
-        } else if (child.name === name) {
-            return newPath;
-        }
-    }
-    return null;
 }

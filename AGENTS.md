@@ -563,6 +563,22 @@ When generating TypeScript, prefer `createRouter<AppState, typeof map>({...})` �
 
 Tests that call `installDom()` or mutate `globalThis.__SUPERCAT_ROUTER_DEVTOOLS__` must use `test.serial`. AVA runs tests in a file concurrently by default; async tests interleave at `await` points, and a `dom.teardown()` from one test can delete `document` while another is still running.
 
+### Testing
+
+For tests, use `@supercat1337/router/testing` instead of writing your own
+adapter:
+
+```js
+import { createTestRouter } from '@supercat1337/router/testing';
+
+const { router, adapter } = createTestRouter({ map, initial: '/login' });
+router.navigate('/profile');
+adapter.trigger(); // simulate popstate
+```
+
+Do not use `getHistory` / `dryMatch` in tests — they are `@internal`.
+Use `createTestRouter` and public APIs.
+
 ## See also
 
 - [`README.md`](README.md) — landing page.

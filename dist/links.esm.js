@@ -22,8 +22,8 @@
  */
 function defaultPreload(leaf, ctx) {
     const meta = /** @type {any} */ (leaf);
-    if (typeof meta.preload === 'function') return meta.preload(ctx);
-    if (typeof meta.load === 'function') return meta.load();
+    if (typeof meta.preload === 'function') {return meta.preload(ctx);}
+    if (typeof meta.load === 'function') {return meta.load();}
     return undefined;
 }
 
@@ -65,9 +65,9 @@ function attachLinks(router, options = {}) {
      * @param {MouseEvent} e
      */
     function onClick(e) {
-        if (e.defaultPrevented) return;
-        if (e.button !== 0) return;
-        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        if (e.defaultPrevented) {return;}
+        if (e.button !== 0) {return;}
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {return;}
 
         const target = /** @type {EventTarget | null} */ (e.target);
         if (!target || typeof (/** @type {any} */ (target).closest) !== 'function') {
@@ -75,17 +75,17 @@ function attachLinks(router, options = {}) {
         }
 
         const el = /** @type {Element | null} */ (/** @type {any} */ (target).closest(SELECTOR));
-        if (!el) return;
+        if (!el) {return;}
 
         const tgt = el.getAttribute('target');
-        if (tgt && tgt !== '_self') return;
-        if (el.hasAttribute('download')) return;
+        if (tgt && tgt !== '_self') {return;}
+        if (el.hasAttribute('download')) {return;}
 
         const href = el.getAttribute('href');
-        if (!href) return;
+        if (!href) {return;}
 
         const rru = router.adapter.normalize(href);
-        if (rru === null) return;
+        if (rru === null) {return;}
 
         e.preventDefault();
 
@@ -155,22 +155,22 @@ function attachPreload(router, options = {}) {
             return;
         }
         const el = /** @type {Element | null} */ (/** @type {any} */ (target).closest(SELECTOR));
-        if (!el) return;
-        if (seen.has(el)) return;
+        if (!el) {return;}
+        if (seen.has(el)) {return;}
         seen.add(el);
 
         const href = el.getAttribute('href');
-        if (!href) return;
+        if (!href) {return;}
 
         const rru = router.adapter.normalize(href);
-        if (rru === null) return;
+        if (rru === null) {return;}
 
         const match = router.getSnapshot().map.match(rru);
-        if (match.status !== 'matched') return;
+        if (match.status !== 'matched') {return;}
 
         const chain = match.chain;
         const leaf = chain.length > 0 ? chain[chain.length - 1] : undefined;
-        if (!leaf) return;
+        if (!leaf) {return;}
 
         try {
             await preload(leaf, ctx);
