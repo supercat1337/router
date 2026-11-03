@@ -382,6 +382,7 @@ export function createRouter(options) {
         on: eventBus.on,
         off: eventBus.off,
         once: eventBus.once,
+        onListenerError: eventBus.onListenerError,
         getHistory,
         dryMatch,
         getActiveMap,

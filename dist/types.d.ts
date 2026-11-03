@@ -1016,6 +1016,18 @@ export declare interface Router<S = any, R extends RouterMap = RouterMap> {
     off<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void): void;
     /** Subscribe for a single emit. Returns an idempotent unsubscribe. */
     once<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void): () => void;
+    /**
+     * Subscribe to listener errors. Additive to the constructor-level
+     * `onListenerError` option: if both are provided, both fire.
+     *
+     * Unlike the constructor option, this can be attached at any time —
+     * useful for framework integrations (`useListenerError` in
+     * `router-react`) that mount after `createRouter`.
+     *
+     * Returns an idempotent unsubscribe. A throwing error listener is
+     * reported via `console.error` and does not break navigation.
+     */
+    onListenerError(cb: OnListenerError): () => void;
 }
 
 /**

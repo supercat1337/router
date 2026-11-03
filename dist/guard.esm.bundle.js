@@ -603,6 +603,7 @@ var EventEmitter = class extends EventEmitterLite {
 // src/events.js
 function createEventBus(onListenerError) {
   const emitter = new EventEmitter();
+  const errorListeners = /* @__PURE__ */ new Set();
   emitter.onListenerError(
     /**
      * @param {unknown} err
@@ -610,20 +611,33 @@ function createEventBus(onListenerError) {
      * @param {any} payload
      */
     (err, event, payload) => {
+      const info = {
+        event: (
+          /** @type {keyof EventPayloads} */
+          event
+        ),
+        snapshot: (
+          /** @type {Snapshot} */
+          /** @type {any} */
+          payload?.snapshot
+        )
+      };
       if (onListenerError) {
-        onListenerError(err, {
-          event: (
-            /** @type {keyof EventPayloads} */
-            event
-          ),
-          snapshot: (
-            /** @type {Snapshot} */
-            /** @type {any} */
-            payload?.snapshot
-          )
-        });
-      } else if (typeof console !== "undefined" && console.error) {
-        console.error(err);
+        onListenerError(err, info);
+      }
+      for (const cb of errorListeners) {
+        try {
+          cb(err, info);
+        } catch (e) {
+          if (typeof console !== "undefined" && console.error) {
+            console.error("[onListenerError] listener threw:", e);
+          }
+        }
+      }
+      if (!onListenerError && errorListeners.size === 0) {
+        if (typeof console !== "undefined" && console.error) {
+          console.error(err);
+        }
       }
     }
   );
@@ -633,7 +647,13 @@ function createEventBus(onListenerError) {
       on: (event, listener) => emitter.on(event, listener),
       off: (event, listener) => emitter.off(event, listener),
       once: (event, listener) => emitter.once(event, listener),
-      emit: (event, payload) => emitter.emit(event, payload)
+      emit: (event, payload) => emitter.emit(event, payload),
+      onListenerError(cb) {
+        errorListeners.add(cb);
+        return () => {
+          errorListeners.delete(cb);
+        };
+      }
     }
   );
 }
@@ -1281,6 +1301,7 @@ function createRouter(options) {
     on: eventBus.on,
     off: eventBus.off,
     once: eventBus.once,
+    onListenerError: eventBus.onListenerError,
     getHistory,
     dryMatch,
     getActiveMap,

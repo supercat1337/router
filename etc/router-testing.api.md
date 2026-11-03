@@ -166,6 +166,12 @@ export type NotFoundHandler = (ctx: NotFoundContext) => NotFoundResult;
 export type NotFoundResult = unknown;
 
 // @public
+export type OnListenerError = (err: unknown, info: {
+    event: keyof EventPayloads;
+    snapshot: Snapshot;
+}) => void;
+
+// @public
 export type ParamsArgs<P extends Record<string, string>> = string extends keyof P ? [params?: Record<string, string>] : [keyof P] extends [never] ? [params?: Record<string, string>] : [params: P];
 
 // @public
@@ -209,6 +215,7 @@ export interface Router<S = any, R extends RouterMap = RouterMap> {
     off<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void): void;
     on<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void): () => void;
     once<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void): () => void;
+    onListenerError(cb: OnListenerError): () => void;
     prefetch(url: string, opts?: PrefetchOptions): Promise<void>;
     replace(url: string): Snapshot;
     revalidate(): Snapshot;

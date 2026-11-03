@@ -24,6 +24,7 @@ import {
     NotFoundContext,
     NotFoundHandler,
     NotFoundResult,
+    OnListenerError,
     ParamsArgs,
     PrefetchOptions,
     PreloadContext,
@@ -45,6 +46,10 @@ export type {
     // on `Snapshot`, `EventPayloads`, `PrefetchOptions`, `Route`,
     // `RouteNameOf`, `ParamsArgs`, `RouteParamsOf`, `MatchResult`,
     // `NotFoundHandler`, `HrefOptions`, and their own transitive closure.
+    //
+    // `OnListenerError` is here because `Router.onListenerError(cb)`
+    // references it — api-extractor reports it as forgotten without
+    // this re-export.
     Children,
     EventPayloads,
     FileMeta,
@@ -59,6 +64,7 @@ export type {
     NotFoundContext,
     NotFoundHandler,
     NotFoundResult,
+    OnListenerError,
     ParamsArgs,
     PrefetchOptions,
     PreloadContext,

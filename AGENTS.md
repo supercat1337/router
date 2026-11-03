@@ -40,9 +40,9 @@ Frozen, branded leaf. `name` required and unique across the map (enforced by `cr
 const home = file({ name: 'home', title: 'Home', layout: 'main' });
 ```
 
-- **Do not** construct leaves by hand — `isFile` will fail.
-- **Do not** reuse a `name` — `MapValidationError` with code `name-duplicate`.
-- The `name` literal is preserved by `file<const M>`, feeding `RouteNames<T>` in `createMap`.
+-   **Do not** construct leaves by hand — `isFile` will fail.
+-   **Do not** reuse a `name` — `MapValidationError` with code `name-duplicate`.
+-   The `name` literal is preserved by `file<const M>`, feeding `RouteNames<T>` in `createMap`.
 
 #### `folder(children, options?) → FolderNode`
 
@@ -58,9 +58,9 @@ const admin = folder(
 );
 ```
 
-- Key rules: `index` and `*` must be files; only one `:name` per level; children non-empty.
-- Signature is `folder(children, options?)` — do not pass `options` first.
-- Do not pass an empty `options` — omit the argument entirely.
+-   Key rules: `index` and `*` must be files; only one `:name` per level; children non-empty.
+-   Signature is `folder(children, options?)` — do not pass `options` first.
+-   Do not pass an empty `options` — omit the argument entirely.
 
 #### `redirect(url) → RedirectResult`
 
@@ -72,9 +72,9 @@ const map = createMap(routes, {
 });
 ```
 
-- **Do not** return `{ url: '/new' }` from `notFound` — that's a render value, not a redirect. Use `redirect('/new')`.
-- In guards prefer `redirect('/x')` over the legacy `{ redirect: '/x' }`. Legacy is accepted at runtime; new code should use the branded form.
-- `isRedirect(result)` is the only supported detection.
+-   **Do not** return `{ url: '/new' }` from `notFound` — that's a render value, not a redirect. Use `redirect('/new')`.
+-   In guards prefer `redirect('/x')` over the legacy `{ redirect: '/x' }`. Legacy is accepted at runtime; new code should use the branded form.
+-   `isRedirect(result)` is the only supported detection.
 
 ### Map
 
@@ -105,8 +105,8 @@ const account = folder({
 | `route(name)`        | `→ Route<N, P>`   | Frozen, branded (`isRoute`), cached. Throws on unknown name / wildcard. |
 | `match(url)`         | `→ MatchResult`   | Match a **normalized** RRU.                                             |
 
-- **Do not** call `map.match(url)` with a Browser URL — pass RRU or `normalizeRRU(url)` first.
-- **Do not** mutate — it's frozen.
+-   **Do not** call `map.match(url)` with a Browser URL — pass RRU or `normalizeRRU(url)` first.
+-   **Do not** mutate — it's frozen.
 
 #### `map.route(name) → Route<N, P>`
 
@@ -120,10 +120,10 @@ userRoute.url({ id: '5' }); // '/users/5'
 userRoute.url(); // TypeError — and compile error
 ```
 
-- **Do not** store a `Route` across map boundaries — it stays bound to its own map. Use `router.route(name)` to re-bind to the current map.
-- **Do not** construct `Route` by hand — `isRoute` will fail.
-- **Do not** expect `map.route('catchall')` — wildcard has no canonical URL; throws `TypeError`.
-- **Do** use `route.params` for runtime introspection — form rendering, debug panels, config validation.
+-   **Do not** store a `Route` across map boundaries — it stays bound to its own map. Use `router.route(name)` to re-bind to the current map.
+-   **Do not** construct `Route` by hand — `isRoute` will fail.
+-   **Do not** expect `map.route('catchall')` — wildcard has no canonical URL; throws `TypeError`.
+-   **Do** use `route.params` for runtime introspection — form rendering, debug panels, config validation.
 
 #### `isMap(x) → boolean`
 
@@ -144,11 +144,11 @@ for (const item of config) {
 const href = map.url(item.route, item.params);
 ```
 
-- **Does not** validate params. `hasRoute(map, 'user')` is `true`; `url('user')` still throws for missing `id`.
-- **Wildcard (`*`) → `false`.**
-- **Non-map / non-string / empty → `false`** (does not throw).
-- **O(N)**, no memoization. Do not call per render.
-- **Do not** use `try/catch` around every `url()` as substitute.
+-   **Does not** validate params. `hasRoute(map, 'user')` is `true`; `url('user')` still throws for missing `id`.
+-   **Wildcard (`*`) → `false`.**
+-   **Non-map / non-string / empty → `false`** (does not throw).
+-   **O(N)**, no memoization. Do not call per render.
+-   **Do not** use `try/catch` around every `url()` as substitute.
 
 #### `MapValidationError`
 
@@ -195,11 +195,11 @@ Returned `Router<S, R>`:
 | `off(event, fn)`       | `→ void`          | Remove by identity                                       |
 | `once(event, fn)`      | `→ () => void`    | Single-fire subscription                                 |
 
-- **Do not** `await` `navigate` / `replace` / `revalidate` — they are synchronous.
-- **Do not** pass Browser URLs — pass RRUs (`/x`, not `https://host/x`).
-- **Do not** use `navigationId` as a component key — compare `url` / `params` instead.
-- **Do not** replace methods — `router` is frozen. Use `attachLinks(router, { navigate })`, `guard.navigate()`, `subscribe`.
-- **Use `subscribe` for framework integration.** Do not stitch `afterEnter` / `afterLeave` / `mapChanged` / `navigationError`.
+-   **Do not** `await` `navigate` / `replace` / `revalidate` — they are synchronous.
+-   **Do not** pass Browser URLs — pass RRUs (`/x`, not `https://host/x`).
+-   **Do not** use `navigationId` as a component key — compare `url` / `params` instead.
+-   **Do not** replace methods — `router` is frozen. Use `attachLinks(router, { navigate })`, `guard.navigate()`, `subscribe`.
+-   **Use `subscribe` for framework integration.** Do not stitch `afterEnter` / `afterLeave` / `mapChanged` / `navigationError`.
 
 #### `subscribe(listener) → () => void`
 
@@ -238,16 +238,26 @@ const router = createRouter({
 });
 ```
 
+Alternatively, subscribe post-construction:
+
+```js
+const unsubscribe = router.onListenerError((err, { event, snapshot }) => {
+    reportToSentry(err, { event, url: snapshot.url });
+});
+```
+
+Additive to the constructor hook — both fire when both are provided. Returns an idempotent unsubscribe. A throwing error listener is logged via `console.error` and does not break navigation. This form is what `router-react`'s `useListenerError` uses — a hook cannot provide a callback at `createRouter` time.
+
 What it catches:
 
-- exceptions thrown by event listeners (`on` / `once` / `subscribe`),
-- reentrancy violations — `navigate` / `replace` / `revalidate` called from inside a transaction (dev: throws to caller; prod: returns current snapshot and reports here),
-- (via the guard layer) `guard-throw`, `guard-redirect-loop`, `invalid-rru`, `reentrancy`.
+-   exceptions thrown by event listeners (`on` / `once` / `subscribe`),
+-   reentrancy violations — `navigate` / `replace` / `revalidate` called from inside a transaction (dev: throws to caller; prod: returns current snapshot and reports here),
+-   (via the guard layer) `guard-throw`, `guard-redirect-loop`, `invalid-rru`, `reentrancy`.
 
 What it does **not** catch:
 
-- `getState` / `adapter.write` throws — these propagate to the caller of `navigate` / `replace` / `revalidate`. Bootstrap (`createRouter`'s initial transaction) cannot continue; the error surfaces at construction.
-- async rejections from `afterEnter` handlers — those are unhandled promise rejections, outside the transaction. Use your own `try/catch` inside the handler (in `router-react`, `useListenerError` covers a subset — see its spec).
+-   `getState` / `adapter.write` throws — these propagate to the caller of `navigate` / `replace` / `revalidate`. Bootstrap (`createRouter`'s initial transaction) cannot continue; the error surfaces at construction.
+-   async rejections from `afterEnter` handlers — those are unhandled promise rejections, outside the transaction. Use your own `try/catch` inside the handler (in `router-react`, `useListenerError` covers a subset — see its spec).
 
 Do **not** use `try/catch` around `navigate` / `replace` as a substitute. In prod, navigation outcomes return a `Snapshot`; they do not throw. In dev, they throw — but only on contract violations, which `onListenerError` reports in prod and which you want visible in dev.
 
@@ -284,8 +294,8 @@ normalizeRRU('/users/5//'); // '/users/5'
 normalizeRRU('/'); // '/'
 ```
 
-- **Do not** use `new URL(...)` — returns a Browser URL.
-- **Do not** apply to Browser URLs — adapter already does BU→RRU.
+-   **Do not** use `new URL(...)` — returns a Browser URL.
+-   **Do not** apply to Browser URLs — adapter already does BU→RRU.
 
 ### Adapters
 
@@ -317,9 +327,9 @@ Hash mode: `opts.search` overrides `location.search` — needed in SSR, where `l
 
 Read / write `history.state` **without changing the URL** — for scroll restoration and per-entry app state.
 
-- **Both are required** on `UrlAdapter` (all built-in adapters implement them). Custom adapters that don't track state must return `null` from `historyState` and be a no-op in `replaceState` — do not omit the methods.
-- `historyState()` returns `null` in SSR / non-browser contexts.
-- `replaceState(state)` never triggers `popstate`, never appears in `historyCalls` in test mocks.
+-   **Both are required** on `UrlAdapter` (all built-in adapters implement them). Custom adapters that don't track state must return `null` from `historyState` and be a no-op in `replaceState` — do not omit the methods.
+-   `historyState()` returns `null` in SSR / non-browser contexts.
+-   `replaceState(state)` never triggers `popstate`, never appears in `historyCalls` in test mocks.
 
 ### Links
 
@@ -335,8 +345,8 @@ const detach = attachLinks(router);
 attachLinks(router, { navigate: nav.navigate, replace: nav.replace });
 ```
 
-- **Selector is fixed** (`[data-router-link]`).
-- Accepts a structurally-typed router — only `adapter`, `navigate`, `replace` used.
+-   **Selector is fixed** (`[data-router-link]`).
+-   Accepts a structurally-typed router — only `adapter`, `navigate`, `replace` used.
 
 #### `attachPreload(router, options?) → () => void`
 
@@ -355,9 +365,9 @@ attachPreload(router, {
 
 Default: `leaf.preload?.(ctx) ?? leaf.load?.()`. `leaf.preload` receives `ctx`; `leaf.load` is called without arguments.
 
-- **Do not** add custom `mouseenter` listeners on `[data-router-link]`.
-- **Do not** rely on `attachPreload` for correctness — opportunistic.
-- **Do not** call `leaf.preload()` without `ctx`.
+-   **Do not** add custom `mouseenter` listeners on `[data-router-link]`.
+-   **Do not** rely on `attachPreload` for correctness — opportunistic.
+-   **Do not** call `leaf.preload()` without `ctx`.
 
 #### `router.prefetch(url, opts?) → Promise<void>`
 
@@ -368,10 +378,10 @@ await router.prefetch('/users/5');
 router.prefetch('/admin', { signal: ctrl.signal });
 ```
 
-- **Current map only** — matches against `getSnapshot().map`.
-- **No guard layer** — prefetch does not go through guards; only actual navigation does.
-- **Errors swallowed** — opportunistic, like `attachPreload`.
-- **Do not** call `leaf.preload()` directly if `router.prefetch(url)` would do — you'd duplicate the match logic and the default fallback.
+-   **Current map only** — matches against `getSnapshot().map`.
+-   **No guard layer** — prefetch does not go through guards; only actual navigation does.
+-   **Errors swallowed** — opportunistic, like `attachPreload`.
+-   **Do not** call `leaf.preload()` directly if `router.prefetch(url)` would do — you'd duplicate the match logic and the default fallback.
 
 ### Guard layer
 
@@ -431,9 +441,9 @@ type GuardErrorPayload =
     | { type: 'reentrancy' };
 ```
 
-- **Do not** connect on the server. Access control is on the server; guards are a client-side UX filter.
-- **Do not** call `nav.navigate` / `nav.replace` from inside a guard's sync frame — `reentrancy`.
-- **Do not** introduce `{ redirect: '/x' }` in new code — use `redirect('/x')`.
+-   **Do not** connect on the server. Access control is on the server; guards are a client-side UX filter.
+-   **Do not** call `nav.navigate` / `nav.replace` from inside a guard's sync frame — `reentrancy`.
+-   **Do not** introduce `{ redirect: '/x' }` in new code — use `redirect('/x')`.
 
 #### `createGuardedRouter(options) → { router, guard, nav }`
 
@@ -452,8 +462,8 @@ attachLinks(router, { navigate: nav.navigate, replace: nav.replace });
 
 `maxRedirects` is the router limit; `guardMaxRedirects` is the guard limit — independent.
 
-- **Do not** call `guard.bind(router)` again — already done.
-- **Do not** wrap the adapter — pass base adapter; wiring is internal.
+-   **Do not** call `guard.bind(router)` again — already done.
+-   **Do not** wrap the adapter — pass base adapter; wiring is internal.
 
 ### Active links
 
@@ -469,8 +479,8 @@ attachActiveLinks(router, { ariaCurrent: 'step' });
 attachActiveLinks(router, { ariaCurrent: false }); // no-op
 ```
 
-- **Do not** expect marking on elements added after the last commit — rescan happens on next commit.
-- **Do not** rely on partial matches — strict RRU equality (`/profile?tab=1` ≠ `/profile`). Prefix matching is not in v1.
+-   **Do not** expect marking on elements added after the last commit — rescan happens on next commit.
+-   **Do not** rely on partial matches — strict RRU equality (`/profile?tab=1` ≠ `/profile`). Prefix matching is not in v1.
 
 ## Common mistakes — Do / Don't
 
@@ -572,38 +582,38 @@ For the top half of this table, the honest recommendation is often: **"if you ne
 
 Verified type surface (see `dist/types.d.ts`):
 
-- **Route names** — `RouteNames<T>` inferred from the `createMap` data literal (`const` type parameters, TS 5.0+). `map.url("typo")` is a compile error. In JS + JSDoc, only when the data literal is written inline in `createMap(...)`.
-- **Route params** — `RouteParamsFor<T>` collects `:name` keys per route into `{ [N]: Record<string, string> }`. Fallback `Record<string, string>` for hand-built maps.
-- **`Route<N, P>`** — `map.route(name)` / `router.route(name)` return a `Route<N, P>`: `name: N` (literal), `params: readonly (keyof P)[]`, `url(...args: ParamsArgs<P>)`. Frozen, cached, branded.
-- **Application state** — `createRouter<S, R>` preserves `S` through `getState()` and `resolveMap({ state })`.
-- **Router** — `Router<S, R>.url(name)` narrows `name` to `RouteNameOf<R>`.
-- **Event payloads** — typed per key.
-- **Snapshot** — `navigationType: NavigationType`, `chain: readonly Node[]`, `params` / `partialParams` / `search: Readonly<Record<string,string>>`, `leaf: Node | undefined`, `redirectedFrom?: string` (set when the commit came from a `redirect()` chain).
-- **`getChainPrefixes` / `chainParams`** — `(snapshot) => string[]` / `(snapshot) => Readonly<Record<string,string>>`. Prefix-match active links and breadcrumbs. `chainParams` picks `params` / `partialParams` based on status; consistent with `snapshot.chain` on error.
-- **`UrlAdapter`** — `href`, `historyState`, `replaceState` are **required** methods. Adapters that don't track state return `null` / no-op. `HrefOptions.search?: string` for SSR hash mode.
-- **`Router.prefetch(url, opts?)`** — `opts: PrefetchOptions` — `{ signal?: AbortSignal }`. Same signal semantics as `leaf.preload(ctx)`; `leaf.load()` is signal-free.
-- **`FileMeta.load` / `FileMeta.preload`** — typed conventions. `load: () => Promise<unknown>` — signal-free. `preload: (ctx: PreloadContext) => void | Promise<unknown>` — `ctx.signal` aborts on detach.
-- **`NavigationType`** — `'initial' | 'push' | 'replace' | 'pop' | 'revalidate'`. The transaction source, not a direction.
-- **`MatchResult.search`** — `Record<string, string>` on both branches. Decoded, last-wins.
-- **`GuardErrorPayload`** — discriminated union; narrow on `.type`.
+-   **Route names** — `RouteNames<T>` inferred from the `createMap` data literal (`const` type parameters, TS 5.0+). `map.url("typo")` is a compile error. In JS + JSDoc, only when the data literal is written inline in `createMap(...)`.
+-   **Route params** — `RouteParamsFor<T>` collects `:name` keys per route into `{ [N]: Record<string, string> }`. Fallback `Record<string, string>` for hand-built maps.
+-   **`Route<N, P>`** — `map.route(name)` / `router.route(name)` return a `Route<N, P>`: `name: N` (literal), `params: readonly (keyof P)[]`, `url(...args: ParamsArgs<P>)`. Frozen, cached, branded.
+-   **Application state** — `createRouter<S, R>` preserves `S` through `getState()` and `resolveMap({ state })`.
+-   **Router** — `Router<S, R>.url(name)` narrows `name` to `RouteNameOf<R>`.
+-   **Event payloads** — typed per key.
+-   **Snapshot** — `navigationType: NavigationType`, `chain: readonly Node[]`, `params` / `partialParams` / `search: Readonly<Record<string,string>>`, `leaf: Node | undefined`, `redirectedFrom?: string` (set when the commit came from a `redirect()` chain).
+-   **`getChainPrefixes` / `chainParams`** — `(snapshot) => string[]` / `(snapshot) => Readonly<Record<string,string>>`. Prefix-match active links and breadcrumbs. `chainParams` picks `params` / `partialParams` based on status; consistent with `snapshot.chain` on error.
+-   **`UrlAdapter`** — `href`, `historyState`, `replaceState` are **required** methods. Adapters that don't track state return `null` / no-op. `HrefOptions.search?: string` for SSR hash mode.
+-   **`Router.prefetch(url, opts?)`** — `opts: PrefetchOptions` — `{ signal?: AbortSignal }`. Same signal semantics as `leaf.preload(ctx)`; `leaf.load()` is signal-free.
+-   **`FileMeta.load` / `FileMeta.preload`** — typed conventions. `load: () => Promise<unknown>` — signal-free. `preload: (ctx: PreloadContext) => void | Promise<unknown>` — `ctx.signal` aborts on detach.
+-   **`NavigationType`** — `'initial' | 'push' | 'replace' | 'pop' | 'revalidate'`. The transaction source, not a direction.
+-   **`MatchResult.search`** — `Record<string, string>` on both branches. Decoded, last-wins.
+-   **`GuardErrorPayload`** — discriminated union; narrow on `.type`.
 
 When generating TypeScript, prefer `createRouter<AppState, typeof map>({...})` — explicit generics make `state` in `resolveMap` and `url(name)` narrowing predictable.
 
 ## Checklist before returning generated code
 
-- [ ] No `async` / `await` inside `resolveMap` or `notFound`.
-- [ ] `navigate` / `replace` arguments are RRUs (`/x`, no `#`).
-- [ ] Data loading is in `afterEnter` with `router.isCurrent(id)` check.
-- [ ] Code splitting is `file({ load })` + `afterEnter`, not a lazy map / Promise-returning `resolveMap`.
-- [ ] Blocking pre-navigation loaders use the guard layer (`leaf.preload` + `signal`), not the core.
-- [ ] Framework integration uses `router.subscribe` — not the four-event stitch.
-- [ ] Route names from external data validated once via `hasRoute`, not `try/catch` per render.
-- [ ] `<a href>` uses `adapter.href(rru)` — not string-concatenated base.
-- [ ] No `getHistory` / `dryMatch` / `getActiveMap` / `resolveMapFor` / `getRedirectPath`.
-- [ ] Guard wiring: either `createGuardedRouter` (one call) or the exact 5-step order.
-- [ ] Guard decisions use `redirect('/x')`, not `{ redirect: '/x' }` (legacy).
-- [ ] Preload-on-hover uses `attachPreload(router, { preload })`, not custom `mouseenter` on `[data-router-link]`.
-- [ ] Do not mutate `router` (frozen) — use `attachLinks` options / `guard.navigate()` / `subscribe`.
+-   [ ] No `async` / `await` inside `resolveMap` or `notFound`.
+-   [ ] `navigate` / `replace` arguments are RRUs (`/x`, no `#`).
+-   [ ] Data loading is in `afterEnter` with `router.isCurrent(id)` check.
+-   [ ] Code splitting is `file({ load })` + `afterEnter`, not a lazy map / Promise-returning `resolveMap`.
+-   [ ] Blocking pre-navigation loaders use the guard layer (`leaf.preload` + `signal`), not the core.
+-   [ ] Framework integration uses `router.subscribe` — not the four-event stitch.
+-   [ ] Route names from external data validated once via `hasRoute`, not `try/catch` per render.
+-   [ ] `<a href>` uses `adapter.href(rru)` — not string-concatenated base.
+-   [ ] No `getHistory` / `dryMatch` / `getActiveMap` / `resolveMapFor` / `getRedirectPath`.
+-   [ ] Guard wiring: either `createGuardedRouter` (one call) or the exact 5-step order.
+-   [ ] Guard decisions use `redirect('/x')`, not `{ redirect: '/x' }` (legacy).
+-   [ ] Preload-on-hover uses `attachPreload(router, { preload })`, not custom `mouseenter` on `[data-router-link]`.
+-   [ ] Do not mutate `router` (frozen) — use `attachLinks` options / `guard.navigate()` / `subscribe`.
 
 ## Tests and global mutations
 
@@ -627,7 +637,7 @@ Use `createTestRouter` and public APIs.
 
 ## See also
 
-- [`README.md`](README.md) — landing page.
-- [`docs/`](docs/README.md) — concepts, recipes, API reference.
-- `dist/types.d.ts` — authoritative public API surface.
-- `etc/router.api.md` — canonical API report (diff-friendly, GitHub only).
+-   [`README.md`](README.md) — landing page.
+-   [`docs/`](docs/README.md) — concepts, recipes, API reference.
+-   `dist/types.d.ts` — authoritative public API surface.
+-   `etc/router.api.md` — canonical API report (diff-friendly, GitHub only).

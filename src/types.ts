@@ -146,8 +146,8 @@ export type RouteNames<Data> = {
                 : never
             : never
         : Data[K] extends FolderNode<any, infer C>
-          ? RouteNames<C>
-          : never;
+        ? RouteNames<C>
+        : never;
 }[keyof Data];
 
 /**
@@ -185,10 +185,10 @@ export type RouteParamsForName<Data, Name, Acc extends Record<string, string> = 
                 : never
             : never
         : Data[K] extends FolderNode<any, infer C>
-          ? K extends `:${infer P}`
-              ? RouteParamsForName<C, Name, Acc & { [Key in P]: string }>
-              : RouteParamsForName<C, Name, Acc>
-          : never;
+        ? K extends `:${infer P}`
+            ? RouteParamsForName<C, Name, Acc & { [Key in P]: string }>
+            : RouteParamsForName<C, Name, Acc>
+        : never;
 }[keyof Data & string];
 
 /**
@@ -211,12 +211,11 @@ export type RouteParamsFor<Data> = {
  *
  * @public
  */
-export type RouteParamsOf<R, N extends string> =
-    R extends RouterMap<any, infer P>
-        ? N extends keyof P
-            ? P[N]
-            : Record<string, string>
-        : Record<string, string>;
+export type RouteParamsOf<R, N extends string> = R extends RouterMap<any, infer P>
+    ? N extends keyof P
+        ? P[N]
+        : Record<string, string>
+    : Record<string, string>;
 
 /**
  * Argument tuple for `url(...)` and `Route.url(...)`.
@@ -233,8 +232,8 @@ export type RouteParamsOf<R, N extends string> =
 export type ParamsArgs<P extends Record<string, string>> = string extends keyof P
     ? [params?: Record<string, string>]
     : [keyof P] extends [never]
-      ? [params?: Record<string, string>]
-      : [params: P];
+    ? [params?: Record<string, string>]
+    : [params: P];
 
 // =============================================================================
 // NotFound, redirect
@@ -309,7 +308,7 @@ export interface RouterMap<
     ParamsMap extends Record<string, Record<string, string>> = Record<
         string,
         Record<string, string>
-    >,
+    >
 > {
     /**
      * Global fallback handler for URLs that match nothing in this map.
@@ -358,7 +357,7 @@ export interface RouterMap<
  */
 export interface Route<
     N extends string = string,
-    P extends Record<string, string> = Record<string, string>,
+    P extends Record<string, string> = Record<string, string>
 > {
     /** Route name; the key used by `RouterMap.url(name)`. */
     readonly name: N;
@@ -786,6 +785,19 @@ export interface Router<S = any, R extends RouterMap = RouterMap> {
         event: E,
         listener: (payload: EventPayloads[E]) => void
     ): () => void;
+
+    /**
+     * Subscribe to listener errors. Additive to the constructor-level
+     * `onListenerError` option: if both are provided, both fire.
+     *
+     * Unlike the constructor option, this can be attached at any time —
+     * useful for framework integrations (`useListenerError` in
+     * `router-react`) that mount after `createRouter`.
+     *
+     * Returns an idempotent unsubscribe. A throwing error listener is
+     * reported via `console.error` and does not break navigation.
+     */
+    onListenerError(cb: OnListenerError): () => void;
 
     // ---- dev-only: always present at runtime, stripped from public .d.ts ----
 

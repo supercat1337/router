@@ -981,6 +981,7 @@ function isRedirect(x) {
  * @property {<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void) => void} off
  * @property {<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void) => () => void} once
  * @property {<E extends keyof EventPayloads>(event: E, payload: EventPayloads[E]) => void} emit
+ * @property {(cb: OnListenerError) => () => void} onListenerError
  */
 
 /**
@@ -991,7 +992,9 @@ function isRedirect(x) {
  * - listener errors are reported via `onListenerError(err, { event, snapshot })`,
  *   with `console.error` as fallback;
  * - `on` returns an idempotent unsubscribe; `once` auto-unsubscribes after
- *   the first emit.
+ *   the first emit;
+ * - `onListenerError(cb)` subscribes post-construction — additive to the
+ *   constructor-level hook.
  *
  * @param {OnListenerError | undefined} onListenerError
  * @returns {EventBus}
@@ -999,9 +1002,9 @@ function isRedirect(x) {
 function createEventBus(onListenerError) {
     const emitter = new EventEmitter();
 
-    // Verify against the library's actual `.d.ts`: `(err, event, payload)`
-    // vs `(err, { event, payload })` vs `(err, ...args)`. Adapt the adapter
-    // below, not the tests.
+    /** @type {Set<OnListenerError>} */
+    const errorListeners = new Set();
+
     emitter.onListenerError(
         /**
          * @param {unknown} err
@@ -1009,18 +1012,38 @@ function createEventBus(onListenerError) {
          * @param {any} payload
          */
         (err, event, payload) => {
+            /** @type {{ event: keyof EventPayloads, snapshot: Snapshot }} */
+            const info = {
+                event: /** @type {keyof EventPayloads} */ (event),
+                snapshot: /** @type {Snapshot} */ (
+                    /** @type {any} */ (payload)?.snapshot
+                ),
+            };
+
+            // 1. Constructor-level hook — the baseline error sink.
             if (onListenerError) {
-                onListenerError(err, {
-                    event: /** @type {keyof EventPayloads} */ (event),
-                    snapshot: /** @type {Snapshot} */ (
-                        /** @type {any} */ (payload)?.snapshot
-                    ),
-                });
-            } else if (
-                typeof console !== "undefined" &&
-                console.error
-            ) {
-                console.error(err);
+                onListenerError(err, info);
+            }
+
+            // 2. Per-listener subscriptions — added post-construction via
+            //    `router.onListenerError(cb)`. Additive to the constructor hook.
+            for (const cb of errorListeners) {
+                try {
+                    cb(err, info);
+                } catch (e) {
+                    // A throwing error listener must not break navigation,
+                    // and must not recurse back into onListenerError.
+                    if (typeof console !== "undefined" && console.error) {
+                        console.error("[onListenerError] listener threw:", e);
+                    }
+                }
+            }
+
+            // 3. Fallback only when nothing handled it.
+            if (!onListenerError && errorListeners.size === 0) {
+                if (typeof console !== "undefined" && console.error) {
+                    console.error(err);
+                }
             }
         },
     );
@@ -1030,6 +1053,12 @@ function createEventBus(onListenerError) {
         off: (event, listener) => emitter.off(event, listener),
         once: (event, listener) => emitter.once(event, listener),
         emit: (event, payload) => emitter.emit(event, payload),
+        onListenerError(cb) {
+            errorListeners.add(cb);
+            return () => {
+                errorListeners.delete(cb);
+            };
+        },
     });
 }
 
@@ -2060,6 +2089,7 @@ function createRouter(options) {
         on: eventBus.on,
         off: eventBus.off,
         once: eventBus.once,
+        onListenerError: eventBus.onListenerError,
         getHistory,
         dryMatch,
         getActiveMap,

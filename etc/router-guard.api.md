@@ -328,6 +328,7 @@ export interface Router<S = any, R extends RouterMap = RouterMap> {
     off<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void): void;
     on<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void): () => void;
     once<E extends keyof EventPayloads>(event: E, listener: (payload: EventPayloads[E]) => void): () => void;
+    onListenerError(cb: OnListenerError): () => void;
     prefetch(url: string, opts?: PrefetchOptions): Promise<void>;
     replace(url: string): Snapshot;
     revalidate(): Snapshot;
