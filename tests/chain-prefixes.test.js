@@ -198,3 +198,14 @@ test('chainParams: error uses prev params', t => {
     t.is(errSnap.status, 'error');
     t.deepEqual(chainParams(errSnap), { id: '7' });
 });
+
+test('getChainPrefixes: root index = /', t => {
+    const map = createMap({ index: file({ name: 'home' }) }, { notFound: nf });
+    const router = createRouter({
+        resolveMap: () => map,
+        getState: () => ({}),
+        adapter: createMemoryAdapter('/'),
+        dev: true,
+    });
+    t.deepEqual(getChainPrefixes(router.getSnapshot()), ['/']);
+});

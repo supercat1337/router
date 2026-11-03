@@ -253,7 +253,8 @@ function urlPrefixes(chain, snapshot, keysMap) {
         if (key === undefined) {
             prefix = parentPrefix;
         } else if (key === 'index') {
-            prefix = parentPrefix;
+            // Nested index → parent prefix (`/admin`). Root index → `/`.
+            prefix = parentPrefix || '/';
         } else if (key === '*') {
             prefix = pathname(snapshot.url);
         } else if (key.startsWith(':')) {
@@ -284,7 +285,9 @@ function commonChainPrefix(prev, next, getKeysMap) {
     const nextPrefixes = urlPrefixes(next.chain, next, getKeysMap(next.map));
     const n = Math.min(prevPrefixes.length, nextPrefixes.length);
     for (let i = 0; i < n; i++) {
-        if (prevPrefixes[i] !== nextPrefixes[i]) {return i;}
+        if (prevPrefixes[i] !== nextPrefixes[i]) {
+            return i;
+        }
     }
     return n;
 }
@@ -334,8 +337,12 @@ function buildSnapshot(
         url,
         leaf: frozenChain.length > 0 ? frozenChain[frozenChain.length - 1] : undefined,
     };
-    if (status === 'notFound') {snap.notFoundResult = notFoundResult;}
-    if (redirectedFrom !== undefined) {snap.redirectedFrom = redirectedFrom;}
+    if (status === 'notFound') {
+        snap.notFoundResult = notFoundResult;
+    }
+    if (redirectedFrom !== undefined) {
+        snap.redirectedFrom = redirectedFrom;
+    }
     return /** @type {Snapshot} */ (Object.freeze(snap));
 }
 

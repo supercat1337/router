@@ -2,12 +2,12 @@
 
 `file` and `folder` construct branded, frozen nodes. Keys are URL-segment patterns:
 
-| Key                                 | Meaning                                                 |
-| :---------------------------------- | :------------------------------------------------------ |
-| `[A-Za-z0-9._~-]+` (not `.` / `..`) | literal segment                                         |
-| `:name`                             | parameter (name matches `[a-zA-Z_][a-zA-Z0-9_]*`)       |
-| `*`                                 | wildcard — must be a `file`, catches remaining segments |
-| `index`                             | the folder's own URL — must be a `file`                 |
+| Key                                 | Meaning                                                            |
+| :---------------------------------- | :----------------------------------------------------------------- |
+| `[A-Za-z0-9._~-]+` (not `.` / `..`) | literal segment                                                    |
+| `:name`                             | parameter (name matches `[a-zA-Z_][a-zA-Z0-9_]*`)                  |
+| `*`                                 | wildcard — must be a `file`, catches remaining segments            |
+| `index`                             | the folder's own URL — must be a `file`. At the root, matches `/`. |
 
 Only one `:name` key per level.
 
@@ -49,9 +49,9 @@ const map = createMap(
 
 Three fallback behaviors are visible side by side:
 
-- `/admin/users/xyz` → `adminNotFound` (local override on `admin`; `users` inherits from `admin`);
-- `/account/xyz` → `404` (inherited from `map.notFound`; `account` has no local `notFound`);
-- `/xyz` → `404` (root).
+-   `/admin/users/xyz` → `adminNotFound` (local override on `admin`; `users` inherits from `admin`);
+-   `/account/xyz` → `404` (inherited from `map.notFound`; `account` has no local `notFound`);
+-   `/xyz` → `404` (root).
 
 `users`, `reports`, and `account` pass **no** second argument — `folder({ ... })` is enough. Only `admin` needs a local `notFound`, so only `admin` has options.
 
@@ -59,24 +59,49 @@ Three fallback behaviors are visible side by side:
 
 `createMap` enforces tree-wide invariants and throws `MapValidationError`:
 
-| Code                   | Meaning                                                  |
-| :--------------------- | :------------------------------------------------------- |
-| `data-not-object`      | data is not a plain object                               |
-| `data-key-invalid`     | top-level key is not a valid segment pattern             |
-| `index-at-root`        | `index` key at the top level (only folders have `index`) |
-| `notFound-missing`     | `options.notFound` is `undefined`                        |
-| `notFound-invalid`     | `options.notFound` is not a function                     |
-| `name-duplicate`       | the same `file({ name })` appears twice                  |
-| `node-not-constructed` | a value is not a `file` / `folder` brand                 |
-| `param-duplicate`      | the same `:name` appears twice in a root-to-leaf chain   |
+| Code                   | Meaning                                                |
+| :--------------------- | :----------------------------------------------------- |
+| `data-not-object`      | data is not a plain object                             |
+| `data-key-invalid`     | top-level key is not a valid segment pattern           |
+| `notFound-missing`     | `options.notFound` is `undefined`                      |
+| `notFound-invalid`     | `options.notFound` is not a function                   |
+| `name-duplicate`       | the same `file({ name })` appears twice                |
+| `node-not-constructed` | a value is not a `file` / `folder` brand               |
+| `param-duplicate`      | the same `:name` appears twice in a root-to-leaf chain |
+| `index-not-file`       | a value under an `index` key is not a `file`           |
+
+### Root `index`
+
+`index` is allowed at the root and matches `/`:
+
+```js
+const map = createMap(
+    {
+        index: file({ name: 'home' }), // `/`
+        about: file({ name: 'about' }), // `/about`
+    },
+    { notFound }
+);
+
+map.match('/'); // matched, leaf = home
+map.url('home'); // '/'
+```
+
+Without `index` at root, `/` is `notFound` with an empty chain — the router
+has no implicit "home" route. This is intentional: a 404 with a real
+handler is more honest than a silent fallback.
+
+`index` under a folder is unchanged: `folder({ index: file(...) })`
+matches the folder's own URL (`/admin`), and `map.url(name)` returns
+`/admin`.
 
 `folder` enforces subtree-shape invariants and throws `TypeError`:
 
-- `children` non-empty, plain object;
-- keys valid (see table above);
-- `*` and `index` children are files;
-- at most one `:name` key per level;
-- `options.notFound` (if provided) is a synchronous function.
+-   `children` non-empty, plain object;
+-   keys valid (see table above);
+-   `*` and `index` children are files;
+-   at most one `:name` key per level;
+-   `options.notFound` (if provided) is a synchronous function.
 
 ## Fallback rules
 
@@ -109,6 +134,6 @@ Three rules that follow from the tree shape, all enforced by tests in `tests/map
 
 ## See also
 
-- [Independent maps](independent-maps.md) — how multiple maps coexist.
-- [`hasRoute` in AGENTS.md](../../AGENTS.md) — validate route names from data.
-- [`MapValidationError` codes in AGENTS.md](../../AGENTS.md).
+-   [Independent maps](independent-maps.md) — how multiple maps coexist.
+-   [`hasRoute` in AGENTS.md](../../AGENTS.md) — validate route names from data.
+-   [`MapValidationError` codes in AGENTS.md](../../AGENTS.md).

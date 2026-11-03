@@ -80,9 +80,6 @@ export function createMap(data, options) {
     }
 
     for (const key of Object.keys(data)) {
-        if (key === 'index') {
-            throw new MapValidationError('index-at-root', '/index');
-        }
         if (parseKey(key) === null) {
             throw new MapValidationError('data-key-invalid', key);
         }
@@ -195,6 +192,12 @@ function collectTree(
         if (!isFile(child) && !isFolder(child)) {
             throw new MapValidationError('node-not-constructed', childPath);
         }
+        // `index` must be a file — same rule as `folder()`. At the root,
+        // this is the only place the check runs (nested folders are
+        // already validated by `folder()` before `createMap` sees them).
+        if (key === 'index' && !isFile(child)) {
+            throw new MapValidationError('index-not-file', childPath);
+        }
         keyMap.set(child, key);
         // `:name` may appear at most once per root-to-leaf chain. A duplicate
         // silently loses the earlier value in `walk` (`{ ...params, name: seg }`
@@ -219,7 +222,10 @@ function collectTree(
             // Wildcard has no canonical URL — not registered for `url()`.
             if (key !== '*') {
                 leafParams.set(child.name, Object.freeze(childParams));
-                const templatePath = key === 'index' ? pathPrefix : childPath;
+                // `index` at the root has `pathPrefix = ''` — the canonical
+                // URL is `/`, not `''`. Nested `index` uses `pathPrefix`
+                // unchanged (`/admin/index` → `/admin`).
+                const templatePath = key === 'index' ? pathPrefix || '/' : childPath;
                 urlTemplates.set(child.name, Object.freeze(parseTemplate(templatePath)));
             }
         }

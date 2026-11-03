@@ -1,6 +1,6 @@
 {
     "name": "@supercat1337/router",
-    "version": "0.8.0",
+    "version": "0.9.0",
     "description": "Synchronous state-relative router for SPA and SSR over a tree of JS objects.",
     "author": "Albert Bazaleev",
     "license": "MIT",
@@ -30,6 +30,10 @@
         "./testing": {
             "types": "./dist/testing.d.ts",
             "import": "./dist/testing.esm.js"
+        },
+        "./ssr": {
+            "types": "./dist/ssr.d.ts",
+            "import": "./dist/ssr.esm.js"
         }
     },
     "types": "dist/types.d.ts",
@@ -43,14 +47,16 @@
         "build_esm:guard": "rollup ./src/guard.js        --file ./dist/guard.esm.js         --format es",
         "build_esm:active-links": "rollup ./src/active-links.js --file ./dist/active-links.esm.js  --format es",
         "build_esm:testing": "rollup ./src/testing.js      --file ./dist/testing.esm.js       --format es",
-        "build_esm": "npm run build_esm:router && npm run build_esm:adapters && npm run build_esm:links && npm run build_esm:guard && npm run build_esm:active-links && npm run build_esm:testing",
+        "build_esm:ssr": "rollup ./src/ssr.js      --file ./dist/ssr.esm.js       --format es",
+        "build_esm": "npm run build_esm:router && npm run build_esm:adapters && npm run build_esm:links && npm run build_esm:guard && npm run build_esm:active-links && npm run build_esm:testing && npm run build_esm:ssr",
         "build_esm_bundle:router": "esbuild ./src/index.js        --format=esm --bundle --platform=neutral --outfile=./dist/router.esm.bundle.js",
         "build_esm_bundle:adapters": "esbuild ./src/adapters.js     --format=esm --bundle --platform=neutral --outfile=./dist/adapters.esm.bundle.js",
         "build_esm_bundle:links": "esbuild ./src/links.js        --format=esm --bundle --platform=neutral --outfile=./dist/links.esm.bundle.js",
         "build_esm_bundle:guard": "esbuild ./src/guard.js        --format=esm --bundle --platform=neutral --outfile=./dist/guard.esm.bundle.js",
         "build_esm_bundle:active-links": "esbuild ./src/active-links.js --format=esm --bundle --platform=neutral --outfile=./dist/active-links.esm.bundle.js",
         "build_esm_bundle:testing": "esbuild ./src/testing.js      --format=esm --bundle --platform=neutral --outfile=./dist/testing.esm.bundle.js",
-        "build_esm_bundle": "npm run build_esm_bundle:router && npm run build_esm_bundle:adapters && npm run build_esm_bundle:links && npm run build_esm_bundle:guard && npm run build_esm_bundle:active-links && npm run build_esm_bundle:testing",
+        "build_esm_bundle:ssr": "esbuild ./src/ssr.js      --format=esm --bundle --platform=neutral --outfile=./dist/ssr.esm.bundle.js",
+        "build_esm_bundle": "npm run build_esm_bundle:router && npm run build_esm_bundle:adapters && npm run build_esm_bundle:links && npm run build_esm_bundle:guard && npm run build_esm_bundle:active-links && npm run build_esm_bundle:testing && npm run build_esm_bundle:ssr",
         "gen_types:tsc": "npx tsc --project my.tsconfig.types.json",
         "gen_types:copy": "shx cp src/*.d.ts dist/types-temp/src/",
         "gen_types": "npm run gen_types:tsc && npm run gen_types:copy",
@@ -60,7 +66,8 @@
         "bundle_types:guard": "api-extractor run --local -c api-extractor.guard.json",
         "bundle_types:active-links": "api-extractor run --local -c api-extractor.active-links.json",
         "bundle_types:testing": "api-extractor run --local -c api-extractor.testing.json",
-        "bundle_types": "npm run bundle_types:router && npm run bundle_types:adapters && npm run bundle_types:links && npm run bundle_types:guard && npm run bundle_types:active-links && npm run bundle_types:testing",
+        "bundle_types:ssr": "api-extractor run --local -c api-extractor.ssr.json",
+        "bundle_types": "npm run bundle_types:router && npm run bundle_types:adapters && npm run bundle_types:links && npm run bundle_types:guard && npm run bundle_types:active-links && npm run bundle_types:testing && npm run bundle_types:ssr",
         "build": "npm run clean && npm run build_esm && npm run build_esm_bundle && npm run gen_types && npm run bundle_types && shx rm -rf dist/types-temp",
         "lint": "eslint src/ tests/",
         "lint:fix": "eslint src/ tests/ --fix",
@@ -116,12 +123,15 @@
         "dist/active-links.esm.bundle.js",
         "dist/testing.esm.js",
         "dist/testing.esm.bundle.js",
+        "dist/ssr.esm.js",
+        "dist/ssr.esm.bundle.js",
         "dist/types.d.ts",
         "dist/adapters.d.ts",
         "dist/links.d.ts",
         "dist/guard.d.ts",
         "dist/active-links.d.ts",
         "dist/testing.d.ts",
+        "dist/ssr.d.ts",
         "README.md",
         "LICENSE.txt"
     ],

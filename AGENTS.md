@@ -152,7 +152,7 @@ const href = map.url(item.route, item.params);
 
 #### `MapValidationError`
 
-`code: MapValidationErrorCode`, `path: string`. Codes: `data-not-object`, `data-key-invalid`, `index-at-root`, `notFound-missing`, `notFound-invalid`, `name-duplicate`, `node-not-constructed`.
+`code: MapValidationErrorCode`, `path: string`. Codes: `data-not-object`, `data-key-invalid`, `notFound-missing`, `notFound-invalid`, `name-duplicate`, `node-not-constructed`, `param-duplicate`, `index-not-file`.
 
 ### Router
 

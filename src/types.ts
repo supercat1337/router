@@ -884,12 +884,12 @@ export type OnListenerError = (
 export type MapValidationErrorCode =
     | 'data-not-object'
     | 'data-key-invalid'
-    | 'index-at-root'
     | 'notFound-missing'
     | 'notFound-invalid'
     | 'name-duplicate'
     | 'node-not-constructed'
-    | 'param-duplicate';
+    | 'param-duplicate'
+    | 'index-not-file';
 
 // =============================================================================
 // Guard layer

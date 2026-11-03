@@ -189,7 +189,7 @@ export interface HrefOptions {
 }
 
 // @public
-export type MapValidationErrorCode = 'data-not-object' | 'data-key-invalid' | 'index-at-root' | 'notFound-missing' | 'notFound-invalid' | 'name-duplicate' | 'node-not-constructed' | 'param-duplicate';
+export type MapValidationErrorCode = 'data-not-object' | 'data-key-invalid' | 'notFound-missing' | 'notFound-invalid' | 'name-duplicate' | 'node-not-constructed' | 'param-duplicate' | 'index-not-file';
 
 // @public
 export type MatchResult = {

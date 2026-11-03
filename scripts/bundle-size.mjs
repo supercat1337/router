@@ -38,6 +38,7 @@ const ENTRIES = [
     ['@supercat1337/router/guard', 'guard'],
     ['@supercat1337/router/active-links', 'active-links'],
     ['@supercat1337/router/testing', 'testing'],
+    ['@supercat1337/router/ssr', 'ssr'],
 ];
 
 /** SI bytes -> human. KB = 1000, MB = 1e6. */
@@ -84,7 +85,9 @@ async function buildSizeBlock() {
     for (const [label, base] of ENTRIES) {
         const m = await measureEntry(base);
         rows.push(
-            `| \`${label}\` | ${fmt(m.esm)} | ${fmt(m.esmGz)} | ${fmt(m.bundle)} | ${fmt(m.bundleGz)} |`
+            `| \`${label}\` | ${fmt(m.esm)} | ${fmt(m.esmGz)} | ${fmt(m.bundle)} | ${fmt(
+                m.bundleGz
+            )} |`
         );
     }
     return [

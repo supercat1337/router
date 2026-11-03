@@ -14,8 +14,8 @@ One runtime dependency (`@supercat1337/event-emitter`). Ships with full `.d.ts` 
 
 The package is written in JavaScript with JSDoc, generates `.d.ts` via `tsc`, and verifies it against a committed API report via `api-extractor`. On your side there's no transpilation.
 
-- **JS projects:** add `// @ts-check` or `checkJs: true` in `jsconfig.json` — you get strict IDE feedback.
-- **TS projects:** import types from `@supercat1337/router` (main entry). Subpaths re-export values; types stay in the main entry.
+-   **JS projects:** add `// @ts-check` or `checkJs: true` in `jsconfig.json` — you get strict IDE feedback.
+-   **TS projects:** import types from `@supercat1337/router` (main entry). Subpaths re-export values; types stay in the main entry.
 
 What's typed: all functions/classes, all public types, route names and params from `createMap` data literals (TS 5.0+), application state via `createRouter<S, R>`, event payloads per key.
 
@@ -29,13 +29,18 @@ import { createPathAdapter } from '@supercat1337/router/adapters';
 import { attachLinks } from '@supercat1337/router/links';
 
 // 1. Two independent maps. Same `/login` path, different context.
+// `index` at root matches `/` — every app has a home page.
 const guestMap = createMap(
-    { login: file({ name: 'login' }) },
+    {
+        index: file({ name: 'home' }), // `/`
+        login: file({ name: 'login' }),
+    },
     { notFound: () => ({ view: '404' }) }
 );
 
 const userMap = createMap(
     {
+        index: file({ name: 'home' }), // `/`
         login: file({ name: 'login' }),
         profile: file({ name: 'profile' }),
     },
@@ -73,9 +78,10 @@ router.navigate('/profile'); // userMap: matched
 
 What just happened:
 
-- `/profile` exists only in `userMap`; in guest context it's `notFound`. **Same path, different meaning** — the state-relative contract.
-- `revalidate()` recomputes the map without moving the browser URL. New `navigationId`, same URL. `subscribe` fires because a new snapshot was committed.
-- Nothing awaited. `navigate()` and `revalidate()` returned a `Snapshot` synchronously; events fired after commit.
+-   `/` matches the root `index` (`home`). Without `index` at root, `/` is `notFound` — there is no implicit home route.
+-   `/profile` exists only in `userMap`; in guest context it's `notFound`. **Same path, different meaning** — the state-relative contract.
+-   `revalidate()` recomputes the map without moving the browser URL. New `navigationId`, same URL. `subscribe` fires because a new snapshot was committed.
+-   Nothing awaited. `navigate()` and `revalidate()` returned a `Snapshot` synchronously; events fired after commit.
 
 ## Quick start — TypeScript
 
@@ -132,7 +138,7 @@ if (!hasRoute(userMap, nameFromConfig)) {
 
 ## Next
 
-- [Routes are data](concepts/routes-are-data.md) — the tree syntax.
-- [Maps are independent](concepts/independent-maps.md) — the state-relative idea.
-- [Transactions are synchronous](concepts/transactions.md) — the LOOP.
-- [Recipes](recipes/README.md) — task-oriented.
+-   [Routes are data](concepts/routes-are-data.md) — the tree syntax.
+-   [Maps are independent](concepts/independent-maps.md) — the state-relative idea.
+-   [Transactions are synchronous](concepts/transactions.md) — the LOOP.
+-   [Recipes](recipes/README.md) — task-oriented.

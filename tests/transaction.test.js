@@ -5,6 +5,7 @@ import { file, folder } from '../src/data-model.js';
 import { createMap } from '../src/map.js';
 import { createRouter } from '../src/router.js';
 import { createMemoryAdapter } from './helpers/memory-adapter.js';
+import { createHashAdapter } from '../src/hash-adapter.js';
 
 /** @type {import("../src/types.js").NotFoundHandler} */
 const nf = () => null;
@@ -442,4 +443,27 @@ test('navigate(current) no-op: search reference is preserved', t => {
     const after = router.navigate('/profile?tab=1'); // same URL → no-op
     t.is(after, before); // whole snapshot identical
     t.is(after.search, before.search); // and its .search reference
+});
+
+test('hash mode: navigate with search commits snapshot.search', t => {
+    const map = createMap(
+        {
+            login: file({ name: 'login' }),
+            users: folder({ ':id': file({ name: 'user' }) }),
+        },
+        { notFound: nf }
+    );
+    const adapter = createHashAdapter({ base: '/app' });
+    // installDom + location setup omitted for brevity; test simulates
+    // location.hash = '#/users/5?tab=1', then createRouter(...)
+    const router = createRouter({
+        resolveMap: () => map,
+        getState: () => ({}),
+        adapter,
+        dev: true,
+    });
+    const snap = router.navigate('/users/5?tab=1');
+    t.is(snap.status, 'matched');
+    t.deepEqual(snap.search, { tab: '1' });
+    t.deepEqual(snap.params, { id: '5' });
 });

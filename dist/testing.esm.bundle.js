@@ -684,7 +684,7 @@ function urlPrefixes(chain, snapshot, keysMap) {
     if (key === void 0) {
       prefix = parentPrefix;
     } else if (key === "index") {
-      prefix = parentPrefix;
+      prefix = parentPrefix || "/";
     } else if (key === "*") {
       prefix = pathname(snapshot.url);
     } else if (key.startsWith(":")) {

@@ -702,9 +702,6 @@ function createMap(data, options) {
     }
 
     for (const key of Object.keys(data)) {
-        if (key === 'index') {
-            throw new MapValidationError('index-at-root', '/index');
-        }
         if (parseKey(key) === null) {
             throw new MapValidationError('data-key-invalid', key);
         }
@@ -817,6 +814,12 @@ function collectTree(
         if (!isFile(child) && !isFolder(child)) {
             throw new MapValidationError('node-not-constructed', childPath);
         }
+        // `index` must be a file — same rule as `folder()`. At the root,
+        // this is the only place the check runs (nested folders are
+        // already validated by `folder()` before `createMap` sees them).
+        if (key === 'index' && !isFile(child)) {
+            throw new MapValidationError('index-not-file', childPath);
+        }
         keyMap.set(child, key);
         // `:name` may appear at most once per root-to-leaf chain. A duplicate
         // silently loses the earlier value in `walk` (`{ ...params, name: seg }`
@@ -841,7 +844,10 @@ function collectTree(
             // Wildcard has no canonical URL — not registered for `url()`.
             if (key !== '*') {
                 leafParams.set(child.name, Object.freeze(childParams));
-                const templatePath = key === 'index' ? pathPrefix : childPath;
+                // `index` at the root has `pathPrefix = ''` — the canonical
+                // URL is `/`, not `''`. Nested `index` uses `pathPrefix`
+                // unchanged (`/admin/index` → `/admin`).
+                const templatePath = key === 'index' ? pathPrefix || '/' : childPath;
                 urlTemplates.set(child.name, Object.freeze(parseTemplate(templatePath)));
             }
         }
@@ -1151,7 +1157,8 @@ function urlPrefixes(chain, snapshot, keysMap) {
         if (key === undefined) {
             prefix = parentPrefix;
         } else if (key === 'index') {
-            prefix = parentPrefix;
+            // Nested index → parent prefix (`/admin`). Root index → `/`.
+            prefix = parentPrefix || '/';
         } else if (key === '*') {
             prefix = pathname(snapshot.url);
         } else if (key.startsWith(':')) {
@@ -1182,7 +1189,9 @@ function commonChainPrefix(prev, next, getKeysMap) {
     const nextPrefixes = urlPrefixes(next.chain, next, getKeysMap(next.map));
     const n = Math.min(prevPrefixes.length, nextPrefixes.length);
     for (let i = 0; i < n; i++) {
-        if (prevPrefixes[i] !== nextPrefixes[i]) {return i;}
+        if (prevPrefixes[i] !== nextPrefixes[i]) {
+            return i;
+        }
     }
     return n;
 }
@@ -1232,8 +1241,12 @@ function buildSnapshot(
         url,
         leaf: frozenChain.length > 0 ? frozenChain[frozenChain.length - 1] : undefined,
     };
-    if (status === 'notFound') {snap.notFoundResult = notFoundResult;}
-    if (redirectedFrom !== undefined) {snap.redirectedFrom = redirectedFrom;}
+    if (status === 'notFound') {
+        snap.notFoundResult = notFoundResult;
+    }
+    if (redirectedFrom !== undefined) {
+        snap.redirectedFrom = redirectedFrom;
+    }
     return /** @type {Snapshot} */ (Object.freeze(snap));
 }
 

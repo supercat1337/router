@@ -610,7 +610,7 @@ export declare class MapValidationError extends Error {
  *
  * @public
  */
-export declare type MapValidationErrorCode = 'data-not-object' | 'data-key-invalid' | 'index-at-root' | 'notFound-missing' | 'notFound-invalid' | 'name-duplicate' | 'node-not-constructed' | 'param-duplicate';
+export declare type MapValidationErrorCode = 'data-not-object' | 'data-key-invalid' | 'notFound-missing' | 'notFound-invalid' | 'name-duplicate' | 'node-not-constructed' | 'param-duplicate' | 'index-not-file';
 
 /**
  * Result of `RouterMap.match`. Always one of the two branches; never `null`.

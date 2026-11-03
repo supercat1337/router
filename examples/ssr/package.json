@@ -1,0 +1,11 @@
+{
+    "name": "router-ssr-example",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "start": "node server.js"
+    },
+    "dependencies": {
+        "@supercat1337/router": "file:../.."
+    }
+}

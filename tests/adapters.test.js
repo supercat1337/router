@@ -452,6 +452,30 @@ test('hash adapter: href round-trips with normalize', t => {
     t.is(a.normalize(bu), '/users/5');
 });
 
+test('hash adapter: href preserves RRU search inside the hash', t => {
+    const dom = installDom({ url: 'https://example.com/app?x=1#/login' });
+    t.teardown(() => dom.teardown());
+    const a = createHashAdapter();
+    t.is(a.href('/users/5?tab=1'), '/app?x=1#/users/5?tab=1');
+    t.is(a.href('/users/5?tab=1', { search: '' }), '/app#/users/5?tab=1');
+});
+
+test('hash adapter: normalize extracts RRU search from the hash', t => {
+    const dom = installDom({ url: 'https://example.com/app?x=1#/login' });
+    t.teardown(() => dom.teardown());
+    const a = createHashAdapter();
+    t.is(a.normalize('/app?x=1#/users/5?tab=1'), '/users/5?tab=1');
+    t.is(a.normalize('/app?x=1#/users/5?tab=1&sort=desc'), '/users/5?tab=1&sort=desc');
+});
+
+test('hash adapter: RRU search round-trips with normalize', t => {
+    const dom = installDom({ url: 'https://example.com/app?x=1#/login' });
+    t.teardown(() => dom.teardown());
+    const a = createHashAdapter();
+    const rru = '/users/5?tab=1';
+    t.is(a.normalize(a.href(rru)), rru);
+});
+
 // ===========================================================================
 // historyState / replaceState
 // ===========================================================================

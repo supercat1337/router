@@ -408,9 +408,6 @@ function createMap(data, options) {
     throw new MapValidationError("notFound-invalid", "");
   }
   for (const key of Object.keys(data)) {
-    if (key === "index") {
-      throw new MapValidationError("index-at-root", "/index");
-    }
     if (parseKey(key) === null) {
       throw new MapValidationError("data-key-invalid", key);
     }
@@ -489,6 +486,9 @@ function collectTree(children, pathPrefix, seenNames, keyMap, leafParams, urlTem
     if (!isFile(child) && !isFolder(child)) {
       throw new MapValidationError("node-not-constructed", childPath);
     }
+    if (key === "index" && !isFile(child)) {
+      throw new MapValidationError("index-not-file", childPath);
+    }
     keyMap.set(child, key);
     let childParams;
     if (key.startsWith(":")) {
@@ -507,7 +507,7 @@ function collectTree(children, pathPrefix, seenNames, keyMap, leafParams, urlTem
       seenNames.add(child.name);
       if (key !== "*") {
         leafParams.set(child.name, Object.freeze(childParams));
-        const templatePath = key === "index" ? pathPrefix : childPath;
+        const templatePath = key === "index" ? pathPrefix || "/" : childPath;
         urlTemplates.set(child.name, Object.freeze(parseTemplate(templatePath)));
       }
     }
@@ -1231,7 +1231,7 @@ function urlPrefixes(chain, snapshot, keysMap) {
     if (key === void 0) {
       prefix = parentPrefix;
     } else if (key === "index") {
-      prefix = parentPrefix;
+      prefix = parentPrefix || "/";
     } else if (key === "*") {
       prefix = pathname(snapshot.url);
     } else if (key.startsWith(":")) {

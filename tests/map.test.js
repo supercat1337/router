@@ -55,15 +55,43 @@ test('createMap: notFound-invalid', t => {
     }
 });
 
-test('createMap: index-at-root', t => {
+test('createMap: index at root is allowed', t => {
+    t.notThrows(() => createMap({ index: file({ name: 'home' }) }, { notFound: nf }));
+});
+
+test('createMap: index at root must be a file', t => {
     try {
-        createMap({ index: file({ name: 'home' }) }, { notFound: nf });
+        createMap({ index: folder({ x: file({ name: 'x' }) }) }, { notFound: nf });
         t.fail('expected throw');
     } catch (e) {
         t.true(e instanceof MapValidationError);
-        t.is(/** @type {MapValidationError} */ (e).code, 'index-at-root');
+        t.is(/** @type {MapValidationError} */ (e).code, 'index-not-file');
         t.is(/** @type {MapValidationError} */ (e).path, '/index');
     }
+});
+
+test('map.url: root index route', t => {
+    const m = createMap({ index: file({ name: 'home' }) }, { notFound: nf });
+    t.is(m.url('home'), '/');
+});
+
+test('map.match: / matches root index', t => {
+    const m = createMap({ index: file({ name: 'home' }) }, { notFound: nf });
+    const r = m.match('/');
+    t.is(r.status, 'matched');
+    if (r.status === 'matched') {
+        t.is(r.chain.length, 1);
+        t.is(r.chain[0].name, 'home');
+        t.deepEqual(r.params, {});
+    }
+});
+
+test('map.route: root index route', t => {
+    const m = createMap({ index: file({ name: 'home' }) }, { notFound: nf });
+    const route = m.route('home');
+    t.is(route.name, 'home');
+    t.deepEqual(route.params, []);
+    t.is(route.url(), '/');
 });
 
 test('createMap: data-key-invalid', t => {
